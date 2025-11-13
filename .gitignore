@@ -87,8 +87,8 @@ CrashReportClient/
 
 # Ignore Git LFS large file tracking metadata if not using it
 # (Remove if you *are* using Git LFS)
-*.uasset
-*.umap
+# *.uasset
+# *.umap
 
 # /Content/
 
