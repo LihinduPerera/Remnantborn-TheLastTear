@@ -1,0 +1,67 @@
+# === META HUMAN GROOM ROOT FIXER – 100% WORKING FINAL VERSION ===
+import bpy
+from mathutils import Vector
+import numpy as np
+
+# CHANGE ONLY THESE TWO NAMES IF NEEDED
+hair_obj_name = "hair"      # ← your legacy Curve object
+head_obj_name = "UEFace"    # ← your MetaHuman head mesh
+
+hair_obj = bpy.data.objects.get(hair_obj_name)
+head_obj = bpy.data.objects.get(head_obj_name)
+
+if not hair_obj or hair_obj.type != 'CURVE':
+    raise Exception(f"Object '{hair_obj_name}' not found or not a CURVE")
+if not head_obj or head_obj.type != 'MESH':
+    raise Exception(f"Object '{head_obj_name}' not found or not a MESH")
+
+# Get real geometric center of the head (works even if origin is at world center)
+depsgraph = bpy.context.evaluated_depsgraph_get()
+head_eval = head_obj.evaluated_get(depsgraph)
+mesh = head_eval.to_mesh()
+center_local = sum((v.co for v in mesh.vertices), Vector()) / len(mesh.vertices)
+head_center_world = head_eval.matrix_world @ center_local
+head_eval.to_mesh_clear()
+
+flipped = 0
+total = 0
+
+for spline in hair_obj.data.splines:
+    total += 1
+    points = spline.points
+    
+    # Get first and last point in world space
+    root_world = hair_obj.matrix_world @ points[0].co.to_3d()
+    tip_world  = hair_obj.matrix_world @ points[-1].co.to_3d()
+    
+    # Compare distance to head center
+    if (tip_world - head_center_world).length < (root_world - head_center_world).length:
+        # Needs flipping → extract all data, reverse it, write back
+        n = len(points)
+        co = np.empty(n * 4, dtype=np.float32)
+        radius = np.empty(n, dtype=np.float32)
+        weight = np.empty(n, dtype=np.float32)
+        tilt = np.empty(n, dtype=np.float32)
+        
+        points.foreach_get("co", co)
+        points.foreach_get("radius", radius)
+        points.foreach_get("weight", weight)
+        points.foreach_get("tilt", tilt)
+        
+        # Reverse everything
+        co.shape = (n, 4)
+        co = co[::-1].ravel()
+        radius = radius[::-1]
+        weight = weight[::-1]
+        tilt = tilt[::-1]
+        
+        # Write back reversed
+        points.foreach_set("co", co)
+        points.foreach_set("radius", radius)
+        points.foreach_set("weight", weight)
+        points.foreach_set("tilt", tilt)
+        
+        flipped += 1
+
+print(f"ROOT FIX DONE! Flipped {flipped} out of {total} strands.")
+print("You can now export the Alembic → rebind in Unreal → perfect physics!")
