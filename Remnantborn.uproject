@@ -245,6 +245,10 @@
 			"SupportedTargetPlatforms": [
 				"Win64"
 			]
+		},
+		{
+			"Name": "GizmoFramework",
+			"Enabled": true
 		}
 	],
 	"TargetPlatforms": [
