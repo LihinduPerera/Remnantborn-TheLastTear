@@ -17,6 +17,7 @@ Saved/
 *.suo
 *.user
 *.userprefs
+.idea/
 
 # Backup and autosave files
 *_Backup*/
