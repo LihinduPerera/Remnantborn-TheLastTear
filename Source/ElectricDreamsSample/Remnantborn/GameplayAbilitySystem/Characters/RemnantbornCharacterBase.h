@@ -18,7 +18,11 @@ public:
 	ARemnantbornCharacterBase();
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="AbilitySystem")
-	class UAbilitySystemComponent* AbilitySystemComponent;
+	UAbilitySystemComponent* AbilitySystemComponent;
+	
+	//Basic Attributes
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="AbilitySystem")
+	class UBasicAttributeSet* BasicAttributeSet;
 	
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="AbilitySystem")
