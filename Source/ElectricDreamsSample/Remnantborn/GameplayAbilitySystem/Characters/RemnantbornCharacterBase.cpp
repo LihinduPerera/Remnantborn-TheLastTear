@@ -5,6 +5,7 @@
 #include "Components/CapsuleComponent.h"
 #include "ElectricDreamsSample/Remnantborn/GameplayAbilitySystem/AttributeSets/BasicAttributeSet.h"
 #include "AbilitySystemBlueprintLibrary.h"
+#include "ElectricDreamsSample/Remnantborn/GameplayAbilitySystem/RemnantbornAbilitySystemComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
@@ -13,7 +14,7 @@ ARemnantbornCharacterBase::ARemnantbornCharacterBase()
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 	
-	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
+	AbilitySystemComponent = CreateDefaultSubobject<URemnantbornAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
 	AbilitySystemComponent->SetIsReplicated(true);
 	AbilitySystemComponent->SetReplicationMode(AscReplicationMode);
 	
