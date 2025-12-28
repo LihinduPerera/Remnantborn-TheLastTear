@@ -4,6 +4,7 @@
 
 #include "Components/CapsuleComponent.h"
 #include "ElectricDreamsSample/Remnantborn/GameplayAbilitySystem/AttributeSets/BasicAttributeSet.h"
+#include "AbilitySystemBlueprintLibrary.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
@@ -103,6 +104,7 @@ TArray<FGameplayAbilitySpecHandle> ARemnantbornCharacterBase::GrantAbilities(
 		AbilityHandles.Add(SpecHandle);
 	}
 	
+	SendAbilitiesChangedEvent();
 	return AbilityHandles;
 }
 
@@ -117,4 +119,16 @@ void ARemnantbornCharacterBase::RemoveAbilities(TArray<FGameplayAbilitySpecHandl
 	{
 		AbilitySystemComponent->ClearAbility(AbilityHandle);
 	}
+	
+	SendAbilitiesChangedEvent();
+}
+
+void ARemnantbornCharacterBase::SendAbilitiesChangedEvent()
+{
+	FGameplayEventData EventData;
+	EventData.EventTag = FGameplayTag::RequestGameplayTag(FName("Event.Abilities.Changed"));
+	EventData.Instigator = this;
+	EventData.Target = this;
+	
+	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(this, EventData.EventTag, EventData);
 }
