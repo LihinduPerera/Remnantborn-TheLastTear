@@ -65,6 +65,7 @@ void ARemnantbornCharacterBase::PossessedBy(AController* NewController)
 	if (AbilitySystemComponent)
 	{
 		AbilitySystemComponent->InitAbilityActorInfo(this,this);
+		GrantAbilities(StartingAbilities);
 	}
 }
 
@@ -81,4 +82,39 @@ void ARemnantbornCharacterBase::OnRep_PlayerState()
 UAbilitySystemComponent* ARemnantbornCharacterBase::GetAbilitySystemComponent() const
 {
 	return AbilitySystemComponent;
+}
+
+TArray<FGameplayAbilitySpecHandle> ARemnantbornCharacterBase::GrantAbilities(
+	TArray<TSubclassOf<UGameplayAbility>> AbilitiesToGrant)
+{
+	if (!AbilitySystemComponent || !HasAuthority())
+	{
+		return TArray<FGameplayAbilitySpecHandle>();
+	}
+	
+	TArray<FGameplayAbilitySpecHandle> AbilityHandles;
+	
+	for (TSubclassOf<UGameplayAbility> Ability: AbilitiesToGrant)
+	{
+		FGameplayAbilitySpecHandle SpecHandle =  AbilitySystemComponent->GiveAbility(FGameplayAbilitySpec(
+			Ability, 1, -1, this
+			));
+		
+		AbilityHandles.Add(SpecHandle);
+	}
+	
+	return AbilityHandles;
+}
+
+void ARemnantbornCharacterBase::RemoveAbilities(TArray<FGameplayAbilitySpecHandle> AbilityHandlesToRemove)
+{
+	if (!AbilitySystemComponent || !HasAuthority())
+	{
+		return;
+	}
+	
+	for (FGameplayAbilitySpecHandle AbilityHandle : AbilityHandlesToRemove)
+	{
+		AbilitySystemComponent->ClearAbility(AbilityHandle);
+	}
 }
