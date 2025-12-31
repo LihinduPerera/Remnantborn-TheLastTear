@@ -133,3 +133,8 @@ void ARemnantbornCharacterBase::SendAbilitiesChangedEvent()
 	
 	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(this, EventData.EventTag, EventData);
 }
+
+void ARemnantbornCharacterBase::ServerSendGameplayEventToSelf_Implementation(FGameplayEventData EventData)
+{
+	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(this, EventData.EventTag, EventData);
+}
