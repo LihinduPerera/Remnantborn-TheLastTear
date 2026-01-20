@@ -19,7 +19,9 @@ public class ElectricDreamsSample : ModuleRules
 			"GameplayTags",
 			"GameplayTasks",
 			"GameplayBehaviorsModule",
-			"DeveloperSettings"
+			"DeveloperSettings",
+			"OnlineSubsystem",
+			"OnlineSubsystemUtils"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
