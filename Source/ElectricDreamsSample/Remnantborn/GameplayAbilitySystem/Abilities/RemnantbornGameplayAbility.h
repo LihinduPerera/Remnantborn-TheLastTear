@@ -15,6 +15,9 @@ class ELECTRICDREAMSSAMPLE_API URemnantbornGameplayAbility : public UGameplayAbi
 	GENERATED_BODY()
 	
 public:
+	
+	URemnantbornGameplayAbility();
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="UI")
 	bool ShouldShowInAbilitiesBar = false;
 };

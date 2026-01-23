@@ -2,3 +2,8 @@
 
 
 #include "RemnantbornGameplayAbility.h"
+
+URemnantbornGameplayAbility::URemnantbornGameplayAbility()
+{
+	ActivationOwnedTags.AddTag(FGameplayTag::RequestGameplayTag(FName("GameplayAbility.Active")));
+}
