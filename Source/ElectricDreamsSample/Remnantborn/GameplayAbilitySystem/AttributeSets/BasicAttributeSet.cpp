@@ -64,10 +64,6 @@ void UBasicAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribute
 	{
 		FGameplayTagContainer DeathAbilityTagContainer;
 		DeathAbilityTagContainer.AddTag(FGameplayTag::RequestGameplayTag(FName("GameplayAbility.Death")));
-		// GetOwningAbilitySystemComponent()->TryActivateAbilitiesByTag(DeathAbilityTagContainer);
-		if (GetOwningAbilitySystemComponent()->IsOwnerActorAuthoritative())
-		{
-			GetOwningAbilitySystemComponent()->TryActivateAbilitiesByTag(DeathAbilityTagContainer);
-		}
+		GetOwningAbilitySystemComponent()->TryActivateAbilitiesByTag(DeathAbilityTagContainer);
 	}
 }
