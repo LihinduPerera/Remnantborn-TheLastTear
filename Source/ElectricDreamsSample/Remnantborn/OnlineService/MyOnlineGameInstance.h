@@ -8,6 +8,9 @@
 #include "MyOnlineGameInstance.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSessionSearchCompleted, bool, bSuccess);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnCreateSessionSuccess);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnCreateSessionFailed);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnJoinSessionFailed);
 
 UCLASS()
 class ELECTRICDREAMSSAMPLE_API UMyOnlineGameInstance : public UGameInstance
@@ -19,36 +22,48 @@ public:
     
     // Session Functions
     UFUNCTION(BlueprintCallable, Category = "Multiplayer")
-    void CreateSession(int32 MaxPlayers = 4, FString SessionName = "MyGameSession");
+    void CreateSession(FString SessionName = "MyGameSession", int32 MaxPlayers = 4);
     
     UFUNCTION(BlueprintCallable, Category = "Multiplayer")
     void FindSessions();
     
     UFUNCTION(BlueprintCallable, Category = "Multiplayer")
-    void JoinSession(int32 SessionIndex);
-    
-    UFUNCTION(BlueprintCallable, Category = "Multiplayer")
-    void StartSession();
+    void JoinSession(FBlueprintSessionResult SessionResult);
     
     UFUNCTION(BlueprintCallable, Category = "Multiplayer")
     void DestroySession();
+    
+    // Simple function for direct IP connection
+    UFUNCTION(BlueprintCallable, Category = "Multiplayer")
+    void JoinByIP(FString IPAddress, int32 Port = 7777);
     
     // Blueprint Events
     UPROPERTY(BlueprintAssignable)
     FOnSessionSearchCompleted OnSessionSearchCompleted;
     
+    UPROPERTY(BlueprintAssignable)
+    FOnCreateSessionSuccess OnCreateSessionSuccess;
+    
+    UPROPERTY(BlueprintAssignable)
+    FOnCreateSessionFailed OnCreateSessionFailed;
+    
+    UPROPERTY(BlueprintAssignable)
+    FOnJoinSessionFailed OnJoinSessionFailed;
+    
     UPROPERTY(BlueprintReadOnly, Category = "Multiplayer")
     TArray<FBlueprintSessionResult> SessionSearchResults;
-    
-protected:
+
+    // The map path to travel to when creating a session. Set this in the blueprint instance.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Multiplayer")
+    FString MapPathToTravel;
+
+private:
     // Session Delegates
     void OnCreateSessionComplete(FName SessionName, bool bSuccess);
     void OnFindSessionsComplete(bool bSuccess);
     void OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
     void OnDestroySessionComplete(FName SessionName, bool bSuccess);
-    void OnStartSessionComplete(FName SessionName, bool bSuccess);
     
-private:
     IOnlineSessionPtr SessionInterface;
     TSharedPtr<FOnlineSessionSearch> SessionSearch;
     
@@ -65,6 +80,8 @@ private:
     FOnDestroySessionCompleteDelegate DestroySessionCompleteDelegate;
     FDelegateHandle DestroySessionCompleteDelegateHandle;
     
-    FOnStartSessionCompleteDelegate StartSessionCompleteDelegate;
-    FDelegateHandle StartSessionCompleteDelegateHandle;
+    // Cached variables for session recreation
+    bool bWaitingForDestroyToCreate = false;
+    FString CachedSessionName;
+    int32 CachedMaxPlayers;
 };
