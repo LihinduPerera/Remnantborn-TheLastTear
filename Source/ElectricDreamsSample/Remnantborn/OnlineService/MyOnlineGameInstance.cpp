@@ -372,6 +372,12 @@ void UMyOnlineGameInstance::TravelToServer(const FString& Address)
     APlayerController* PlayerController = GetFirstLocalPlayerController();
     if (PlayerController)
     {
+        // Reset input mode before traveling
+        FInputModeGameOnly InputMode;
+        PlayerController->SetInputMode(InputMode);
+        PlayerController->SetShowMouseCursor(false);
+        PlayerController->bShowMouseCursor = false;
+        
         UE_LOG(LogTemp, Log, TEXT("Client traveling to: %s"), *Address);
         PlayerController->ClientTravel(Address, TRAVEL_Absolute);
     }

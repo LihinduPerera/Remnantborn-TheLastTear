@@ -14,6 +14,7 @@ public:
     
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<class UMainMenuWidget> MainMenuWidgetClass;
@@ -21,4 +22,6 @@ protected:
 private:
 	UPROPERTY()
 	class UMainMenuWidget* MainMenuWidget;
+    
+	void CleanupInputMode();
 };

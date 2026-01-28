@@ -236,7 +236,7 @@ void UMainMenuWidget::HandleCreateSessionSuccess()
     if (StatusText)
     {
         StatusText->SetText(FText::FromString("Session created successfully!"));
-    }
+    } 
 }
 
 void UMainMenuWidget::HandleCreateSessionFailed(const FString& ErrorMessage)
