@@ -10,11 +10,20 @@
 UMyOnlineGameInstance::UMyOnlineGameInstance()
 {
     DefaultMapPath = TEXT("/Game/Remnantborn/Levels/Multiplayer1");
+    DefaultMaxPlayers = 4;
+    bIsHosting = false;
 }
 
 void UMyOnlineGameInstance::Init()
 {
     Super::Init();
+    
+    // Initialize Online Subsystem
+    IOnlineSubsystem* OnlineSub = Online::GetSubsystem(GetWorld());
+    if (OnlineSub)
+    {
+        UE_LOG(LogTemp, Log, TEXT("Online Subsystem: %s"), *OnlineSub->GetSubsystemName().ToString());
+    }
     
     // Bind to network events
     if (GEngine)
@@ -433,7 +442,7 @@ void UMyOnlineGameInstance::LeaveGame()
     }
     
     // Return to main menu
-    UGameplayStatics::OpenLevel(this, FName("/Game/Maps/MainMenu"), true);
+    UGameplayStatics::OpenLevel(this, FName("/Game/Remnantborn/Levels/MainMenu"), true);
 }
 
 void UMyOnlineGameInstance::HandleNetworkFailure(UWorld* World, UNetDriver* NetDriver, ENetworkFailure::Type FailureType, const FString& ErrorString)
@@ -444,7 +453,7 @@ void UMyOnlineGameInstance::HandleNetworkFailure(UWorld* World, UNetDriver* NetD
     // Return to main menu on network failure
     if (World && World->IsGameWorld())
     {
-        UGameplayStatics::OpenLevel(World, FName("/Game/Maps/MainMenu"));
+        UGameplayStatics::OpenLevel(World, FName("/Game/Remnantborn/Levels/MainMenu"));
     }
 }
 

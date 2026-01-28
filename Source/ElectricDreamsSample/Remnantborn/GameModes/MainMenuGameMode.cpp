@@ -4,7 +4,7 @@
 
 AMainMenuGameMode::AMainMenuGameMode()
 {
-	static ConstructorHelpers::FClassFinder<UUserWidget> WidgetClassFinder(TEXT("/Game/UI/WBP_MainMenu"));
+	static ConstructorHelpers::FClassFinder<UUserWidget> WidgetClassFinder(TEXT("/Game/Remnantborn/Widgets/OnlineService/WBP_MainMenu"));
 	if (WidgetClassFinder.Succeeded())
 	{
 		MainMenuWidgetClass = WidgetClassFinder.Class;
