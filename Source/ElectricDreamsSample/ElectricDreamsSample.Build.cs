@@ -21,7 +21,12 @@ public class ElectricDreamsSample : ModuleRules
 			"GameplayBehaviorsModule",
 			"DeveloperSettings",
 			"OnlineSubsystem",
-			"OnlineSubsystemUtils"
+			"OnlineSubsystemUtils",
+			"Networking",
+			"Sockets",
+			"Slate",
+			"SlateCore",
+			"UMG"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
