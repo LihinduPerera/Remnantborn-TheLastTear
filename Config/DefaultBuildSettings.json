@@ -1,0 +1,10 @@
+{
+  "BuildSettingsVersion": 2,
+  "bLegacyParentIncludePaths": false,
+  "CppStandard": "Cpp20",
+  "bStrictConformanceMode": true,
+  "bStrictInlineConformance": true,
+  "UndefinedIdentifierWarningLevel": "Error",
+  "bValidateFormatStrings": true,
+  "IncludeOrderVersion": "Unreal5_7"
+}

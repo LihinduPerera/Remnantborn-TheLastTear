@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"EngineAssociation": "5.7",
-	"Category": "Samples",
+	"Category": "",
 	"Description": "",
 	"Modules": [
 		{
@@ -9,7 +9,8 @@
 			"Type": "Runtime",
 			"LoadingPhase": "Default",
 			"AdditionalDependencies": [
-				"Engine"
+				"OnlineSubsystem",
+				"OnlineSubsystemUtils"
 			]
 		}
 	],
@@ -268,14 +269,20 @@
 		{
 			"Name": "SocketSubsystemEOS",
 			"Enabled": true
+		},
+		{
+			"Name": "OnlineSubsystem",
+			"Enabled": true
+		},
+		{
+			"Name": "OnlineSubsystemNull",
+			"Enabled": true
 		}
 	],
 	"TargetPlatforms": [
-		"HoloLens",
-		"Linux",
-		"LinuxArm64",
-		"Windows",
-		"Mac"
+		"Win64",
+		"Win32",
+		"Windows"
 	],
 	"EpicSampleNameHash": "2667230247"
 }

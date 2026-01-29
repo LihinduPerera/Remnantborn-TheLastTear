@@ -8,8 +8,19 @@ public class ElectricDreamsSampleTarget : TargetRules
 	public ElectricDreamsSampleTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Game;
-		DefaultBuildSettings = BuildSettingsVersion.V2;
-
-		ExtraModuleNames.AddRange( new string[] { "ElectricDreamsSample" } );
+        
+		// Use V6 and match engine settings exactly
+		DefaultBuildSettings = BuildSettingsVersion.V6;
+        
+		// Use 5_7 to match engine
+		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_7;
+        
+		// Use C++20 as required
+		CppStandard = CppStandardVersion.Cpp20;
+        
+		ExtraModuleNames.AddRange(new string[] { "ElectricDreamsSample" });
+        
+		// IMPORTANT: Match engine's shared environment exactly
+		// Don't override anything - let engine use its defaults
 	}
 }

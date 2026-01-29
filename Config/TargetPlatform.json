@@ -1,0 +1,8 @@
+{
+  "bBuildWithEditor": true,
+  "bBuildWithUnrealEd": true,
+  "bBuildRequiresCookedData": false,
+  "bBuildWithDDC": true,
+  "bUseIoStore": false,
+  "bEditorDependsOnData": false
+}

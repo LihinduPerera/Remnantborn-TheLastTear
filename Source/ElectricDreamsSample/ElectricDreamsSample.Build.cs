@@ -36,6 +36,11 @@ public class ElectricDreamsSample : ModuleRules
 			"GameplayTasks",
 			"GameplayTags"
 		});
+		
+		if (Target.Configuration == UnrealTargetConfiguration.Shipping)
+		{
+			PublicDefinitions.Add("UE_BUILD_SHIPPING=1");
+		}
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
