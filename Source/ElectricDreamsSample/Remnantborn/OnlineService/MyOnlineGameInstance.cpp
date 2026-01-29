@@ -9,7 +9,7 @@
 
 UMyOnlineGameInstance::UMyOnlineGameInstance()
 {
-    DefaultMapPath = TEXT("/Game/Remnantborn/Levels/Multiplayer1");
+    DefaultMapPath = TEXT("/Game/Remnantborn/Levels/TestGround");
     DefaultMaxPlayers = 4;
     bIsHosting = false;
 }
