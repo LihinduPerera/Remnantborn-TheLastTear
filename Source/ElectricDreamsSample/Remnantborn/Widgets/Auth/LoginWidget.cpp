@@ -60,6 +60,8 @@ void ULoginWidget::OnLoginClicked()
     FString Email = EmailInput->GetText().ToString();
     FString Password = PasswordInput->GetText().ToString();
     
+    UE_LOG(LogTemp, Log, TEXT("Login attempt: Email=%s"), *Email);
+    
     if (Email.IsEmpty() || Password.IsEmpty())
     {
         if (ErrorText)
@@ -85,7 +87,17 @@ void ULoginWidget::OnLoginClicked()
     UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
     if (GameInstance)
     {
+        UE_LOG(LogTemp, Log, TEXT("Calling GameInstance->Login"));
         GameInstance->Login(Email, Password);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("GameInstance is null!"));
+        if (ErrorText)
+        {
+            ErrorText->SetText(FText::FromString("Game instance not found"));
+            ErrorText->SetVisibility(ESlateVisibility::Visible);
+        }
     }
 }
 
@@ -167,6 +179,10 @@ void ULoginWidget::OnCloseClicked()
 
 void ULoginWidget::HandleLoginComplete(const FAuthResponse& AuthResponse)
 {
+    UE_LOG(LogTemp, Log, TEXT("LoginWidget: HandleLoginComplete called. Success=%s, Error=%s"),
+        AuthResponse.bSuccess ? TEXT("true") : TEXT("false"),
+        *AuthResponse.ErrorMessage);
+    
     if (AuthResponse.bSuccess)
     {
         if (StatusText)

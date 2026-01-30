@@ -1,4 +1,3 @@
-// FILE PATH: D:\projects\UnrealProjects\Remnantborn\Source\ElectricDreamsSample\Remnantborn\Widgets\MainMenuWidget.h
 #pragma once
 
 #include "CoreMinimal.h"

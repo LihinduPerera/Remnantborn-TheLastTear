@@ -254,9 +254,12 @@ void UHttpManager::HandleLoginResponse(FHttpRequestPtr Request, FHttpResponsePtr
         return;
     }
     
-    if (Response->GetResponseCode() == 200)
+    FString ResponseContent = Response->GetContentAsString();
+    UE_LOG(LogTemp, Log, TEXT("Login Response: %s"), *ResponseContent);
+    UE_LOG(LogTemp, Log, TEXT("Response Code: %d"), Response->GetResponseCode());
+    
+    if (Response->GetResponseCode() == 200 || Response->GetResponseCode() == 201)
     {
-        FString ResponseContent = Response->GetContentAsString();
         AuthResponse = ParseAuthResponse(ResponseContent);
         
         if (AuthResponse.bSuccess)
@@ -270,7 +273,15 @@ void UHttpManager::HandleLoginResponse(FHttpRequestPtr Request, FHttpResponsePtr
             // Save to config
             SaveAuth(AuthToken, CurrentUserId);
             
-            UE_LOG(LogTemp, Log, TEXT("Login successful for user: %s"), *CurrentProfile.Username);
+            UE_LOG(LogTemp, Log, TEXT("Login successful for user: %s, Token: %s"), 
+                *CurrentProfile.Username, *AuthToken);
+            
+            // Trigger profile load after successful login
+            GetProfile(CurrentUserId);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Login failed: %s"), *AuthResponse.ErrorMessage);
         }
     }
     else
@@ -280,7 +291,7 @@ void UHttpManager::HandleLoginResponse(FHttpRequestPtr Request, FHttpResponsePtr
         
         // Try to parse error message
         TSharedPtr<FJsonObject> JsonObject;
-        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
+        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseContent);
         if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
         {
             FString Message;
@@ -289,6 +300,8 @@ void UHttpManager::HandleLoginResponse(FHttpRequestPtr Request, FHttpResponsePtr
                 AuthResponse.ErrorMessage = Message;
             }
         }
+        
+        UE_LOG(LogTemp, Error, TEXT("Login error: %s"), *AuthResponse.ErrorMessage);
     }
     
     OnLoginComplete.Broadcast(AuthResponse);
@@ -398,22 +411,31 @@ void UHttpManager::HandleProfileResponse(FHttpRequestPtr Request, FHttpResponseP
         return;
     }
     
+    FString ResponseContent = Response->GetContentAsString();
+    UE_LOG(LogTemp, Log, TEXT("Profile Response: %s"), *ResponseContent);
+    UE_LOG(LogTemp, Log, TEXT("Profile Response Code: %d"), Response->GetResponseCode());
+    
     if (Response->GetResponseCode() == 200)
     {
-        FString ResponseContent = Response->GetContentAsString();
         TSharedPtr<FJsonObject> JsonObject;
         TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseContent);
         
         if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
         {
-            // FIXED: Parse data object from the response
+            // Log for debugging
+            FString OutputString;
+            TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
+            FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer);
+            UE_LOG(LogTemp, Log, TEXT("Profile JSON: %s"), *OutputString);
+            
+            // Try to parse data field
             const TSharedPtr<FJsonObject>* DataObjectPtr = nullptr;
             if (JsonObject->TryGetObjectField(TEXT("data"), DataObjectPtr) && DataObjectPtr != nullptr)
             {
                 CurrentProfile = ParseUserProfile(*DataObjectPtr);
                 OnProfileLoaded.Broadcast(CurrentProfile);
                 
-                UE_LOG(LogTemp, Log, TEXT("Profile loaded for user: %s (Level: %d, Remnants: %d)"),
+                UE_LOG(LogTemp, Log, TEXT("Profile loaded from data field for user: %s (Level: %d, Remnants: %d)"),
                        *CurrentProfile.Username, CurrentProfile.Level, CurrentProfile.RemnantCount);
             }
             else
@@ -421,16 +443,22 @@ void UHttpManager::HandleProfileResponse(FHttpRequestPtr Request, FHttpResponseP
                 // If no "data" field, try to parse the root object
                 CurrentProfile = ParseUserProfile(JsonObject);
                 OnProfileLoaded.Broadcast(CurrentProfile);
+                
+                UE_LOG(LogTemp, Log, TEXT("Profile loaded from root object for user: %s (Level: %d, Remnants: %d)"),
+                       *CurrentProfile.Username, CurrentProfile.Level, CurrentProfile.RemnantCount);
             }
         }
         else
         {
             OnApiError.Broadcast(TEXT("Failed to parse profile data"));
+            UE_LOG(LogTemp, Error, TEXT("Failed to parse profile JSON"));
         }
     }
     else
     {
-        OnApiError.Broadcast(FString::Printf(TEXT("Failed to load profile (Code: %d)"), Response->GetResponseCode()));
+        FString ErrorMsg = FString::Printf(TEXT("Failed to load profile (Code: %d)"), Response->GetResponseCode());
+        OnApiError.Broadcast(ErrorMsg);
+        UE_LOG(LogTemp, Error, TEXT("%s"), *ErrorMsg);
     }
 }
 
@@ -443,49 +471,112 @@ FAuthResponse UHttpManager::ParseAuthResponse(const FString& JsonString)
     
     if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
     {
+        // Log the entire JSON for debugging
+        FString OutputString;
+        TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
+        FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer);
+        UE_LOG(LogTemp, Log, TEXT("Parsing JSON: %s"), *OutputString);
+        
+        // Check for success field
         bool bSuccess = false;
         if (JsonObject->TryGetBoolField(TEXT("success"), bSuccess))
         {
             AuthResponse.bSuccess = bSuccess;
         }
-        
-        FString Token;
-        if (JsonObject->TryGetStringField(TEXT("token"), Token))
+        else
         {
-            AuthResponse.Token = Token;
+            // If no success field, assume successful for 200/201 responses
+            AuthResponse.bSuccess = true;
         }
         
-        // FIXED: Use pointer to TSharedPtr for TryGetObjectField
+        // Try to get token from root or data object
         const TSharedPtr<FJsonObject>* DataObjectPtr = nullptr;
         if (JsonObject->TryGetObjectField(TEXT("data"), DataObjectPtr) && DataObjectPtr != nullptr)
         {
-            // Dereference the pointer to get the actual object
             const TSharedPtr<FJsonObject>& DataObject = *DataObjectPtr;
-            AuthResponse.UserProfile = ParseUserProfile(DataObject);
             
-            // Also try to get token from data if not already set
-            if (AuthResponse.Token.IsEmpty())
+            // Get token
+            if (DataObject->TryGetStringField(TEXT("token"), AuthResponse.Token))
             {
-                DataObject->TryGetStringField(TEXT("token"), AuthResponse.Token);
+                UE_LOG(LogTemp, Log, TEXT("Found token in data object"));
+            }
+            
+            // Parse user profile from data object
+            AuthResponse.UserProfile = ParseUserProfile(DataObject);
+        }
+        else
+        {
+            // If no data field, try to get token and profile from root
+            JsonObject->TryGetStringField(TEXT("token"), AuthResponse.Token);
+            AuthResponse.UserProfile = ParseUserProfile(JsonObject);
+        }
+        
+        // If still no token, check if it's in the user profile data
+        if (AuthResponse.Token.IsEmpty())
+        {
+            const TSharedPtr<FJsonObject>* DataObjectPtr2 = nullptr;
+            if (JsonObject->TryGetObjectField(TEXT("data"), DataObjectPtr2) && DataObjectPtr2 != nullptr)
+            {
+                (*DataObjectPtr2)->TryGetStringField(TEXT("token"), AuthResponse.Token);
             }
         }
         
         // Get error message if any
-        if (!AuthResponse.bSuccess)
+        if (!AuthResponse.bSuccess || AuthResponse.Token.IsEmpty())
         {
-            JsonObject->TryGetStringField(TEXT("message"), AuthResponse.ErrorMessage);
+            FString Message;
+            if (JsonObject->TryGetStringField(TEXT("message"), Message))
+            {
+                AuthResponse.ErrorMessage = Message;
+            }
+            else
+            {
+                AuthResponse.ErrorMessage = TEXT("Authentication failed");
+            }
+            
+            // If we have no token, it's not a successful auth
+            if (AuthResponse.Token.IsEmpty())
+            {
+                AuthResponse.bSuccess = false;
+            }
         }
+        
+        UE_LOG(LogTemp, Log, TEXT("Parse result: Success=%s, Token=%s, Error=%s"), 
+            AuthResponse.bSuccess ? TEXT("true") : TEXT("false"),
+            *AuthResponse.Token,
+            *AuthResponse.ErrorMessage);
+    }
+    else
+    {
+        AuthResponse.bSuccess = false;
+        AuthResponse.ErrorMessage = TEXT("Failed to parse response");
+        UE_LOG(LogTemp, Error, TEXT("Failed to parse JSON response"));
     }
     
     return AuthResponse;
 }
 
+
 FUserProfile UHttpManager::ParseUserProfile(const TSharedPtr<FJsonObject>& JsonObject)
 {
     FUserProfile Profile;
     
-    JsonObject->TryGetStringField(TEXT("userId"), Profile.UserId);
-    JsonObject->TryGetStringField(TEXT("username"), Profile.Username);
+    // Try different field names for user ID
+    if (!JsonObject->TryGetStringField(TEXT("userId"), Profile.UserId))
+    {
+        JsonObject->TryGetStringField(TEXT("user_id"), Profile.UserId);
+    }
+    
+    // Try different field names for username
+    if (!JsonObject->TryGetStringField(TEXT("username"), Profile.Username))
+    {
+        FString TempUsername;
+        if (JsonObject->TryGetStringField(TEXT("userName"), TempUsername))
+        {
+            Profile.Username = TempUsername;
+        }
+    }
+    
     JsonObject->TryGetStringField(TEXT("email"), Profile.Email);
     
     int32 Level = 1;
@@ -496,6 +587,10 @@ FUserProfile UHttpManager::ParseUserProfile(const TSharedPtr<FJsonObject>& JsonO
     
     int32 RemnantCount = 100;
     if (JsonObject->TryGetNumberField(TEXT("remnant_count"), RemnantCount))
+    {
+        Profile.RemnantCount = RemnantCount;
+    }
+    else if (JsonObject->TryGetNumberField(TEXT("remnantCount"), RemnantCount))
     {
         Profile.RemnantCount = RemnantCount;
     }
@@ -519,66 +614,21 @@ bool UHttpManager::LoadSavedAuth()
         {
             if (!SavedToken.IsEmpty() && !SavedUserId.IsEmpty())
             {
-                // Store the token temporarily
+                UE_LOG(LogTemp, Log, TEXT("Found saved auth: UserId=%s, Token=%s"), 
+                    *SavedUserId, *SavedToken);
+                
+                // Store and verify the token
                 AuthToken = SavedToken;
                 CurrentUserId = SavedUserId;
                 
-                // Verify the token without setting bIsLoggedIn yet
-                TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject());
-                FString Content;
-                TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Content);
-                FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer);
-                
-                // Create a separate request for verification
-                FHttpModule& HttpModule = FHttpModule::Get();
-                TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = HttpModule.CreateRequest();
-                
-                Request->SetURL(BaseUrl + TEXT("/auth/verify-token"));
-                Request->SetVerb(TEXT("POST"));
-                Request->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *AuthToken));
-                Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
-                Request->SetHeader(TEXT("Accept"), TEXT("application/json"));
-                
-                Request->OnProcessRequestComplete().BindLambda([this](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
-                {
-                    if (bWasSuccessful && Response.IsValid() && Response->GetResponseCode() == 200)
-                    {
-                        FString ResponseContent = Response->GetContentAsString();
-                        TSharedPtr<FJsonObject> JsonObject;
-                        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseContent);
-                        
-                        if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
-                        {
-                            // Parse the data field
-                            const TSharedPtr<FJsonObject>* DataObjectPtr = nullptr;
-                            if (JsonObject->TryGetObjectField(TEXT("data"), DataObjectPtr) && DataObjectPtr != nullptr)
-                            {
-                                CurrentProfile = ParseUserProfile(*DataObjectPtr);
-                                bIsLoggedIn = true;
-                                UE_LOG(LogTemp, Log, TEXT("Auto-login successful for user: %s"), *CurrentProfile.Username);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // Clear invalid saved auth
-                        AuthToken.Empty();
-                        CurrentUserId.Empty();
-                        if (GConfig)
-                        {
-                            GConfig->RemoveKey(TEXT("Auth"), *TOKEN_KEY, GGameIni);
-                            GConfig->RemoveKey(TEXT("Auth"), *USER_ID_KEY, GGameIni);
-                            GConfig->Flush(false, GGameIni);
-                        }
-                        UE_LOG(LogTemp, Warning, TEXT("Saved token verification failed"));
-                    }
-                });
-                
-                if (Request->ProcessRequest())
-                {
-                    return true;
-                }
+                // Verify the token immediately
+                VerifyToken(SavedToken);
+                return true;
             }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Log, TEXT("No saved auth found"));
         }
     }
     

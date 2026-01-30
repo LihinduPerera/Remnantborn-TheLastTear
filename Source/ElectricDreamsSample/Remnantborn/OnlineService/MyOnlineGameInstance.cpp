@@ -646,11 +646,22 @@ FString UMyOnlineGameInstance::GetAuthToken() const
 
 void UMyOnlineGameInstance::HandleLoginComplete(const FAuthResponse& AuthResponse)
 {
-    if (AuthResponse.bSuccess)
+    if (AuthResponse.bSuccess && !AuthResponse.Token.IsEmpty())
     {
         bIsAuthenticated = true;
         CurrentUserProfile = AuthResponse.UserProfile;
-        UE_LOG(LogTemp, Log, TEXT("Login successful for user: %s"), *CurrentUserProfile.Username);
+        
+        UE_LOG(LogTemp, Log, TEXT("Login successful for user: %s, Level: %d"), 
+            *CurrentUserProfile.Username, CurrentUserProfile.Level);
+        
+        // Update UI immediately
+        OnProfileUpdated.Broadcast(CurrentUserProfile);
+        
+        // Get full profile details
+        if (!CurrentUserProfile.UserId.IsEmpty())
+        {
+            GetUserProfile();
+        }
     }
     else
     {
@@ -663,11 +674,22 @@ void UMyOnlineGameInstance::HandleLoginComplete(const FAuthResponse& AuthRespons
 
 void UMyOnlineGameInstance::HandleSignupComplete(const FAuthResponse& AuthResponse)
 {
-    if (AuthResponse.bSuccess)
+    if (AuthResponse.bSuccess && !AuthResponse.Token.IsEmpty())
     {
         bIsAuthenticated = true;
         CurrentUserProfile = AuthResponse.UserProfile;
-        UE_LOG(LogTemp, Log, TEXT("Signup successful for user: %s"), *CurrentUserProfile.Username);
+        
+        UE_LOG(LogTemp, Log, TEXT("Signup successful for user: %s, Level: %d"), 
+            *CurrentUserProfile.Username, CurrentUserProfile.Level);
+        
+        // Update UI immediately
+        OnProfileUpdated.Broadcast(CurrentUserProfile);
+        
+        // Get full profile details
+        if (!CurrentUserProfile.UserId.IsEmpty())
+        {
+            GetUserProfile();
+        }
     }
     else
     {
@@ -684,7 +706,11 @@ void UMyOnlineGameInstance::HandleTokenVerified(const FAuthResponse& AuthRespons
     {
         bIsAuthenticated = true;
         CurrentUserProfile = AuthResponse.UserProfile;
+        
         UE_LOG(LogTemp, Log, TEXT("Token verified for user: %s"), *CurrentUserProfile.Username);
+        
+        // Update UI
+        OnProfileUpdated.Broadcast(CurrentUserProfile);
         
         // Get full profile
         GetUserProfile();
@@ -692,13 +718,35 @@ void UMyOnlineGameInstance::HandleTokenVerified(const FAuthResponse& AuthRespons
     else
     {
         bIsAuthenticated = false;
+        CurrentUserProfile = FUserProfile();
+        
+        // Clear invalid saved auth
+        if (HttpManager)
+        {
+            FString Token = HttpManager->GetAuthToken();
+            if (!Token.IsEmpty())
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Clearing invalid token"));
+                HttpManager->Logout();
+            }
+        }
+        
         UE_LOG(LogTemp, Warning, TEXT("Token verification failed: %s"), *AuthResponse.ErrorMessage);
     }
 }
 
 void UMyOnlineGameInstance::HandleProfileLoaded(const FUserProfile& UserProfile)
 {
+    // Update current profile
     CurrentUserProfile = UserProfile;
+    
+    // Make sure we're authenticated if we have a valid profile
+    if (!CurrentUserProfile.UserId.IsEmpty())
+    {
+        bIsAuthenticated = true;
+    }
+    
+    // Broadcast update
     OnProfileUpdated.Broadcast(UserProfile);
     
     UE_LOG(LogTemp, Log, TEXT("Profile loaded: %s (Level: %d, Remnants: %d)"),

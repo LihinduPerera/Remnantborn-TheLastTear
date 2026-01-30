@@ -1,4 +1,3 @@
-// FILE PATH: D:\projects\UnrealProjects\Remnantborn\Source\ElectricDreamsSample\Remnantborn\Widgets\MainMenuWidget.cpp
 #include "MainMenuWidget.h"
 #include "ElectricDreamsSample/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 #include "Components/Button.h"
@@ -423,14 +422,38 @@ void UMainMenuWidget::HandleLoginComplete(const FAuthResponse& AuthResponse)
         {
             StatusText->SetText(FText::FromString("Login successful!"));
         }
+        
+        // Hide any login widget
+        if (LoginWidget)
+        {
+            LoginWidget->RemoveFromParent();
+            LoginWidget = nullptr;
+        }
+        
+        // Show success message briefly
+        FTimerHandle TimerHandle;
+        GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
+        {
+            if (StatusText)
+            {
+                StatusText->SetText(FText::FromString("Ready"));
+            }
+        }, 2.0f, false);
     }
     else
     {
+        bIsLoggedIn = false;
+        
         if (ErrorText)
         {
             ErrorText->SetText(FText::FromString(AuthResponse.ErrorMessage));
             ErrorText->SetVisibility(ESlateVisibility::Visible);
             GetWorld()->GetTimerManager().SetTimer(ErrorClearTimer, this, &UMainMenuWidget::ClearErrorMessage, 5.0f, false);
+        }
+        
+        if (StatusText)
+        {
+            StatusText->SetText(FText::FromString("Login failed"));
         }
     }
 }
@@ -527,7 +550,7 @@ void UMainMenuWidget::ClearErrorMessage()
 
 void UMainMenuWidget::UpdateUserInfo()
 {
-    if (bIsLoggedIn)
+    if (bIsLoggedIn && !CurrentUserProfile.Username.IsEmpty())
     {
         // Show user info panel
         if (UserInfoPanel)
@@ -555,6 +578,17 @@ void UMainMenuWidget::UpdateUserInfo()
         if (UserRemnantText)
         {
             UserRemnantText->SetText(FText::FromString(FString::Printf(TEXT("Remnants: %d"), CurrentUserProfile.RemnantCount)));
+        }
+        
+        // Update profile button text
+        if (ProfileButton)
+        {
+            // If you have a text block on the button, update it
+            UTextBlock* ButtonText = Cast<UTextBlock>(ProfileButton->GetChildAt(0));
+            if (ButtonText)
+            {
+                ButtonText->SetText(FText::FromString(FString::Printf(TEXT("Profile (%s)"), *CurrentUserProfile.Username)));
+            }
         }
     }
     else
@@ -585,6 +619,16 @@ void UMainMenuWidget::UpdateUserInfo()
         if (UserRemnantText)
         {
             UserRemnantText->SetText(FText::FromString(TEXT("Remnants: -")));
+        }
+        
+        // Update profile button text
+        if (ProfileButton)
+        {
+            UTextBlock* ButtonText = Cast<UTextBlock>(ProfileButton->GetChildAt(0));
+            if (ButtonText)
+            {
+                ButtonText->SetText(FText::FromString(TEXT("Profile")));
+            }
         }
     }
 }
