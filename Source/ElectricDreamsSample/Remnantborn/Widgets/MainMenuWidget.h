@@ -21,6 +21,7 @@ class ELECTRICDREAMSSAMPLE_API UMainMenuWidget : public UUserWidget
     
 public:
 	virtual void NativeConstruct() override;
+    virtual void NativeDestruct() override;
     
 protected:
 	// === Multiplayer Handlers ===
@@ -66,19 +67,19 @@ protected:
 	UFUNCTION()
 	void HandleJoinSessionFailed(const FString& ErrorMessage);
     
+    // FIXED: Single handler for both login and signup
 	UFUNCTION()
-	void HandleLoginComplete(const FAuthResponse& AuthResponse);
-    
-	UFUNCTION()
-	void HandleSignupComplete(const FAuthResponse& AuthResponse);
+	void HandleAuthComplete(const FAuthResponse& AuthResponse);
     
 	UFUNCTION()
 	void HandleProfileUpdated(const FUserProfile& UserProfile);
     
 	// Helper functions
 	void UpdateSessionList();
-	void ClearErrorMessage();
 	void UpdateUserInfo();
+    void ClearError();
+    void ShowError(const FString& Message);
+    void SetStatusText(const FString& Message);
     
 	// Widget Components - Multiplayer
 	UPROPERTY(meta = (BindWidget))

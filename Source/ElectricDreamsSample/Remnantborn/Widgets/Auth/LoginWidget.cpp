@@ -183,6 +183,14 @@ void ULoginWidget::HandleLoginComplete(const FAuthResponse& AuthResponse)
         AuthResponse.bSuccess ? TEXT("true") : TEXT("false"),
         *AuthResponse.ErrorMessage);
     
+    // Unbind from events to prevent multiple calls
+    UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+    if (GameInstance)
+    {
+        GameInstance->OnAuthLoginComplete.RemoveDynamic(this, &ULoginWidget::HandleLoginComplete);
+        GameInstance->OnAuthSignupComplete.RemoveDynamic(this, &ULoginWidget::HandleLoginComplete);
+    }
+    
     if (AuthResponse.bSuccess)
     {
         if (StatusText)
@@ -195,7 +203,7 @@ void ULoginWidget::HandleLoginComplete(const FAuthResponse& AuthResponse)
         GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
         {
             RemoveFromParent();
-        }, 1.5f, false);
+        }, 1.0f, false);
     }
     else
     {

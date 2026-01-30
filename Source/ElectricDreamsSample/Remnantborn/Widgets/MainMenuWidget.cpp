@@ -62,7 +62,7 @@ void UMainMenuWidget::NativeConstruct()
     }
 
     // Get GameInstance and bind events
-    UMyOnlineGameInstance *GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+    UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
     if (GameInstance)
     {
         // Multiplayer events
@@ -71,17 +71,27 @@ void UMainMenuWidget::NativeConstruct()
         GameInstance->OnCreateSessionFailed.AddDynamic(this, &UMainMenuWidget::HandleCreateSessionFailed);
         GameInstance->OnJoinSessionFailed.AddDynamic(this, &UMainMenuWidget::HandleJoinSessionFailed);
         
-        // Authentication events
-        GameInstance->OnAuthLoginComplete.AddDynamic(this, &UMainMenuWidget::HandleLoginComplete);
-        GameInstance->OnAuthSignupComplete.AddDynamic(this, &UMainMenuWidget::HandleSignupComplete);
+        // Authentication events - FIX: Use AddDynamic with correct syntax
+        GameInstance->OnAuthLoginComplete.AddDynamic(this, &UMainMenuWidget::HandleAuthComplete);
+        GameInstance->OnAuthSignupComplete.AddDynamic(this, &UMainMenuWidget::HandleAuthComplete);
         GameInstance->OnProfileUpdated.AddDynamic(this, &UMainMenuWidget::HandleProfileUpdated);
         
         // Check if already logged in
-        bIsLoggedIn = GameInstance->IsLoggedIn();
-        if (bIsLoggedIn)
+        if (GameInstance->IsLoggedIn())
         {
             CurrentUserProfile = GameInstance->GetCurrentUserProfile();
+            bIsLoggedIn = true;
             UpdateUserInfo();
+            
+            if (StatusText)
+            {
+                StatusText->SetText(FText::FromString("Welcome back!"));
+            }
+        }
+        else
+        {
+            // Try to load saved auth
+            GameInstance->LoadSavedAuth();
         }
     }
 
@@ -108,16 +118,29 @@ void UMainMenuWidget::NativeConstruct()
     UpdateUserInfo();
 }
 
+void UMainMenuWidget::NativeDestruct()
+{
+    // Clean up widgets
+    if (LoginWidget && LoginWidget->IsInViewport())
+    {
+        LoginWidget->RemoveFromParent();
+        LoginWidget = nullptr;
+    }
+    
+    if (ProfileWidget && ProfileWidget->IsInViewport())
+    {
+        ProfileWidget->RemoveFromParent();
+        ProfileWidget = nullptr;
+    }
+    
+    Super::NativeDestruct();
+}
+
 void UMainMenuWidget::OnHostButtonClicked()
 {
     if (!bIsLoggedIn)
     {
-        if (ErrorText)
-        {
-            ErrorText->SetText(FText::FromString("Please login to host a game"));
-            ErrorText->SetVisibility(ESlateVisibility::Visible);
-            GetWorld()->GetTimerManager().SetTimer(ErrorClearTimer, this, &UMainMenuWidget::ClearErrorMessage, 3.0f, false);
-        }
+        ShowError("Please login to host a game");
         return;
     }
     
@@ -130,33 +153,24 @@ void UMainMenuWidget::OnHostButtonClicked()
     // Include username in session name
     SessionName = FString::Printf(TEXT("%s's Game"), *CurrentUserProfile.Username);
 
-    UMyOnlineGameInstance *GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+    UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
     if (GameInstance)
     {
-        if (StatusText)
-        {
-            StatusText->SetText(FText::FromString("Creating session..."));
-        }
-        // Clear any errors
-        if (ErrorText)
-        {
-            ErrorText->SetVisibility(ESlateVisibility::Hidden);
-        }
+        SetStatusText("Creating session...");
+        ClearError();
         GameInstance->CreateSession(SessionName, 4);
     }
 }
 
 void UMainMenuWidget::OnFindSessionsButtonClicked()
 {
-    UMyOnlineGameInstance *GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+    UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
     if (GameInstance)
     {
-        if (StatusText)
-        {
-            StatusText->SetText(FText::FromString("Searching for LAN games..."));
-        }
+        SetStatusText("Searching for LAN games...");
+        
         // Clear previous results
-        for (USessionInfoObject *Item : SessionListItems)
+        for (USessionInfoObject* Item : SessionListItems)
         {
             if (Item)
             {
@@ -168,11 +182,8 @@ void UMainMenuWidget::OnFindSessionsButtonClicked()
         {
             SessionListView->ClearListItems();
         }
-        // Clear any errors
-        if (ErrorText)
-        {
-            ErrorText->SetVisibility(ESlateVisibility::Hidden);
-        }
+        
+        ClearError();
         SelectedSessionIndex = -1;
         GameInstance->FindSessions();
     }
@@ -182,30 +193,17 @@ void UMainMenuWidget::OnJoinButtonClicked()
 {
     if (SelectedSessionIndex >= 0)
     {
-        UMyOnlineGameInstance *GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+        UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
         if (GameInstance)
         {
-            if (StatusText)
-            {
-                StatusText->SetText(FText::FromString("Joining session..."));
-            }
-            // Clear any errors
-            if (ErrorText)
-            {
-                ErrorText->SetVisibility(ESlateVisibility::Hidden);
-            }
+            SetStatusText("Joining session...");
+            ClearError();
             GameInstance->JoinSessionByIndex(SelectedSessionIndex);
         }
     }
     else
     {
-        if (ErrorText)
-        {
-            ErrorText->SetText(FText::FromString("Please select a session first"));
-            ErrorText->SetVisibility(ESlateVisibility::Visible);
-            // Clear error after 3 seconds
-            GetWorld()->GetTimerManager().SetTimer(ErrorClearTimer, this, &UMainMenuWidget::ClearErrorMessage, 3.0f, false);
-        }
+        ShowError("Please select a session first");
     }
 }
 
@@ -216,30 +214,17 @@ void UMainMenuWidget::OnDirectJoinButtonClicked()
         FString IPAddress = DirectIPTextBox->GetText().ToString();
         if (!IPAddress.IsEmpty())
         {
-            UMyOnlineGameInstance *GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+            UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
             if (GameInstance)
             {
-                if (StatusText)
-                {
-                    StatusText->SetText(FText::FromString("Connecting..."));
-                }
-                // Clear any errors
-                if (ErrorText)
-                {
-                    ErrorText->SetVisibility(ESlateVisibility::Hidden);
-                }
+                SetStatusText("Connecting...");
+                ClearError();
                 GameInstance->JoinByIP(IPAddress, 7777);
             }
         }
         else
         {
-            if (ErrorText)
-            {
-                ErrorText->SetText(FText::FromString("Please enter an IP address"));
-                ErrorText->SetVisibility(ESlateVisibility::Visible);
-                // Clear error after 3 seconds
-                GetWorld()->GetTimerManager().SetTimer(ErrorClearTimer, this, &UMainMenuWidget::ClearErrorMessage, 3.0f, false);
-            }
+            ShowError("Please enter an IP address");
         }
     }
 }
@@ -254,7 +239,7 @@ void UMainMenuWidget::OnLoginButtonClicked()
     if (LoginWidgetClass)
     {
         // Remove existing login widget
-        if (LoginWidget)
+        if (LoginWidget && LoginWidget->IsInViewport())
         {
             LoginWidget->RemoveFromParent();
             LoginWidget = nullptr;
@@ -264,17 +249,14 @@ void UMainMenuWidget::OnLoginButtonClicked()
         LoginWidget = CreateWidget<ULoginWidget>(GetWorld(), LoginWidgetClass);
         if (LoginWidget)
         {
-            LoginWidget->AddToViewport();
+            LoginWidget->AddToViewport(100); // Higher Z-order
             
-            // Center the widget
-            FVector2D ViewportSize;
-            if (GEngine && GEngine->GameViewport)
+            // Bind to login widget events
+            if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
             {
-                GEngine->GameViewport->GetViewportSize(ViewportSize);
-                LoginWidget->SetPositionInViewport(FVector2D(
-                    (ViewportSize.X - LoginWidget->GetDesiredSize().X) / 2,
-                    (ViewportSize.Y - LoginWidget->GetDesiredSize().Y) / 2
-                ));
+                // Temporarily bind directly to see login results
+                GameInstance->OnAuthLoginComplete.AddDynamic(this, &UMainMenuWidget::HandleAuthComplete);
+                GameInstance->OnAuthSignupComplete.AddDynamic(this, &UMainMenuWidget::HandleAuthComplete);
             }
         }
     }
@@ -285,7 +267,7 @@ void UMainMenuWidget::OnProfileButtonClicked()
     if (ProfileWidgetClass && bIsLoggedIn)
     {
         // Remove existing profile widget
-        if (ProfileWidget)
+        if (ProfileWidget && ProfileWidget->IsInViewport())
         {
             ProfileWidget->RemoveFromParent();
             ProfileWidget = nullptr;
@@ -295,46 +277,28 @@ void UMainMenuWidget::OnProfileButtonClicked()
         ProfileWidget = CreateWidget<UUserProfileWidget>(GetWorld(), ProfileWidgetClass);
         if (ProfileWidget)
         {
-            ProfileWidget->AddToViewport();
+            ProfileWidget->AddToViewport(100);
             ProfileWidget->UpdateProfile(
                 CurrentUserProfile.Username,
                 CurrentUserProfile.Level,
                 CurrentUserProfile.RemnantCount,
                 CurrentUserProfile.AvatarUrl
             );
-            
-            // Center the widget
-            FVector2D ViewportSize;
-            if (GEngine && GEngine->GameViewport)
-            {
-                GEngine->GameViewport->GetViewportSize(ViewportSize);
-                ProfileWidget->SetPositionInViewport(FVector2D(
-                    (ViewportSize.X - ProfileWidget->GetDesiredSize().X) / 2,
-                    (ViewportSize.Y - ProfileWidget->GetDesiredSize().Y) / 2
-                ));
-            }
         }
     }
 }
 
-void UMainMenuWidget::OnSessionSelected(UObject *Item)
+void UMainMenuWidget::OnSessionSelected(UObject* Item)
 {
-    if (USessionInfoObject *SessionInfo = Cast<USessionInfoObject>(Item))
+    if (USessionInfoObject* SessionInfo = Cast<USessionInfoObject>(Item))
     {
         SelectedSessionIndex = SessionInfo->SessionIndex;
-        if (StatusText)
-        {
-            StatusText->SetText(FText::FromString(FString::Printf(TEXT("Selected: %s"), *SessionInfo->SessionName)));
-        }
-        // Clear any errors
-        if (ErrorText)
-        {
-            ErrorText->SetVisibility(ESlateVisibility::Hidden);
-        }
+        SetStatusText(FString::Printf(TEXT("Selected: %s"), *SessionInfo->SessionName));
+        ClearError();
     }
 }
 
-void UMainMenuWidget::OnSessionDoubleClicked(UObject *Item)
+void UMainMenuWidget::OnSessionDoubleClicked(UObject* Item)
 {
     OnSessionSelected(Item);
     OnJoinButtonClicked();
@@ -342,89 +306,52 @@ void UMainMenuWidget::OnSessionDoubleClicked(UObject *Item)
 
 void UMainMenuWidget::HandleSessionSearchCompleted(bool bSuccess)
 {
-    if (StatusText)
-    {
-        if (bSuccess)
-        {
-            StatusText->SetText(FText::FromString("Search completed"));
-        }
-        else
-        {
-            StatusText->SetText(FText::FromString("Search failed - No sessions found"));
-        }
-    }
-
     if (bSuccess)
     {
+        SetStatusText("Search completed");
         UpdateSessionList();
     }
     else
     {
-        if (ErrorText)
-        {
-            ErrorText->SetText(FText::FromString("No games found on LAN"));
-            ErrorText->SetVisibility(ESlateVisibility::Visible);
-            // Clear error after 3 seconds
-            GetWorld()->GetTimerManager().SetTimer(ErrorClearTimer, this, &UMainMenuWidget::ClearErrorMessage, 3.0f, false);
-        }
+        SetStatusText("Search failed");
+        ShowError("No games found on LAN");
     }
 }
 
 void UMainMenuWidget::HandleCreateSessionSuccess()
 {
-    if (StatusText)
-    {
-        StatusText->SetText(FText::FromString("Session created successfully!"));
-    }
+    SetStatusText("Session created successfully!");
 }
 
-void UMainMenuWidget::HandleCreateSessionFailed(const FString &ErrorMessage)
+void UMainMenuWidget::HandleCreateSessionFailed(const FString& ErrorMessage)
 {
-    if (StatusText)
-    {
-        StatusText->SetText(FText::FromString("Failed to create session"));
-    }
-
-    if (ErrorText)
-    {
-        ErrorText->SetText(FText::FromString(ErrorMessage));
-        ErrorText->SetVisibility(ESlateVisibility::Visible);
-        // Clear error after 3 seconds
-        GetWorld()->GetTimerManager().SetTimer(ErrorClearTimer, this, &UMainMenuWidget::ClearErrorMessage, 3.0f, false);
-    }
+    SetStatusText("Failed to create session");
+    ShowError(ErrorMessage);
 }
 
-void UMainMenuWidget::HandleJoinSessionFailed(const FString &ErrorMessage)
+void UMainMenuWidget::HandleJoinSessionFailed(const FString& ErrorMessage)
 {
-    if (StatusText)
-    {
-        StatusText->SetText(FText::FromString("Failed to join session"));
-    }
-
-    if (ErrorText)
-    {
-        ErrorText->SetText(FText::FromString(ErrorMessage));
-        ErrorText->SetVisibility(ESlateVisibility::Visible);
-        // Clear error after 3 seconds
-        GetWorld()->GetTimerManager().SetTimer(ErrorClearTimer, this, &UMainMenuWidget::ClearErrorMessage, 3.0f, false);
-    }
+    SetStatusText("Failed to join session");
+    ShowError(ErrorMessage);
 }
 
-void UMainMenuWidget::HandleLoginComplete(const FAuthResponse& AuthResponse)
+// FIXED: Single handler for both login and signup
+void UMainMenuWidget::HandleAuthComplete(const FAuthResponse& AuthResponse)
 {
+    UE_LOG(LogTemp, Log, TEXT("MainMenuWidget: Auth complete - Success: %s, Error: %s"), 
+        AuthResponse.bSuccess ? TEXT("true") : TEXT("false"),
+        *AuthResponse.ErrorMessage);
+    
     if (AuthResponse.bSuccess)
     {
         bIsLoggedIn = true;
         CurrentUserProfile = AuthResponse.UserProfile;
         UpdateUserInfo();
         
-        if (StatusText)
-        {
-            StatusText->SetText(FText::FromString("Login successful!"));
-        }
+        SetStatusText("Login successful!");
         
-        // Hide any login widget
-        if (LoginWidget)
+        // Hide login widget if it exists
+        if (LoginWidget && LoginWidget->IsInViewport())
         {
             LoginWidget->RemoveFromParent();
             LoginWidget = nullptr;
@@ -434,49 +361,31 @@ void UMainMenuWidget::HandleLoginComplete(const FAuthResponse& AuthResponse)
         FTimerHandle TimerHandle;
         GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
         {
-            if (StatusText)
-            {
-                StatusText->SetText(FText::FromString("Ready"));
-            }
+            SetStatusText("Ready");
         }, 2.0f, false);
     }
     else
     {
         bIsLoggedIn = false;
-        
-        if (ErrorText)
-        {
-            ErrorText->SetText(FText::FromString(AuthResponse.ErrorMessage));
-            ErrorText->SetVisibility(ESlateVisibility::Visible);
-            GetWorld()->GetTimerManager().SetTimer(ErrorClearTimer, this, &UMainMenuWidget::ClearErrorMessage, 5.0f, false);
-        }
-        
-        if (StatusText)
-        {
-            StatusText->SetText(FText::FromString("Login failed"));
-        }
+        ShowError(AuthResponse.ErrorMessage);
+        SetStatusText("Login failed");
     }
-}
-
-void UMainMenuWidget::HandleSignupComplete(const FAuthResponse& AuthResponse)
-{
-    HandleLoginComplete(AuthResponse); // Same handling as login
 }
 
 void UMainMenuWidget::HandleProfileUpdated(const FUserProfile& UserProfile)
 {
-    CurrentUserProfile = UserProfile;
-    UpdateUserInfo();
+    UE_LOG(LogTemp, Log, TEXT("MainMenuWidget: Profile updated - User: %s, Level: %d"), 
+        *UserProfile.Username, UserProfile.Level);
     
-    if (StatusText)
-    {
-        StatusText->SetText(FText::FromString("Profile updated"));
-    }
+    CurrentUserProfile = UserProfile;
+    bIsLoggedIn = true;
+    UpdateUserInfo();
+    SetStatusText("Profile updated");
 }
 
 void UMainMenuWidget::UpdateSessionList()
 {
-    UMyOnlineGameInstance *GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+    UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
     if (!GameInstance || !SessionListView)
     {
         return;
@@ -489,10 +398,10 @@ void UMainMenuWidget::UpdateSessionList()
     // Get search results from GameInstance
     for (int32 i = 0; i < GameInstance->SessionSearchResults.Num(); i++)
     {
-        const FSessionInfo &SessionInfo = GameInstance->SessionSearchResults[i];
+        const FSessionInfo& SessionInfo = GameInstance->SessionSearchResults[i];
 
         // Create new session info object
-        USessionInfoObject *ListItem = NewObject<USessionInfoObject>(this);
+        USessionInfoObject* ListItem = NewObject<USessionInfoObject>(this);
         if (ListItem)
         {
             // Ensure we have valid data
@@ -526,25 +435,37 @@ void UMainMenuWidget::UpdateSessionList()
     // Update status text with count
     if (SessionListItems.Num() > 0)
     {
-        if (StatusText)
-        {
-            StatusText->SetText(FText::FromString(FString::Printf(TEXT("Found %d sessions"), SessionListItems.Num())));
-        }
+        SetStatusText(FString::Printf(TEXT("Found %d sessions"), SessionListItems.Num()));
     }
     else
     {
-        if (StatusText)
-        {
-            StatusText->SetText(FText::FromString("No sessions found"));
-        }
+        SetStatusText("No sessions found");
     }
 }
 
-void UMainMenuWidget::ClearErrorMessage()
+void UMainMenuWidget::ClearError()
 {
     if (ErrorText)
     {
         ErrorText->SetVisibility(ESlateVisibility::Hidden);
+    }
+}
+
+void UMainMenuWidget::ShowError(const FString& Message)
+{
+    if (ErrorText)
+    {
+        ErrorText->SetText(FText::FromString(Message));
+        ErrorText->SetVisibility(ESlateVisibility::Visible);
+        GetWorld()->GetTimerManager().SetTimer(ErrorClearTimer, this, &UMainMenuWidget::ClearError, 5.0f, false);
+    }
+}
+
+void UMainMenuWidget::SetStatusText(const FString& Message)
+{
+    if (StatusText)
+    {
+        StatusText->SetText(FText::FromString(Message));
     }
 }
 
@@ -579,17 +500,6 @@ void UMainMenuWidget::UpdateUserInfo()
         {
             UserRemnantText->SetText(FText::FromString(FString::Printf(TEXT("Remnants: %d"), CurrentUserProfile.RemnantCount)));
         }
-        
-        // Update profile button text
-        if (ProfileButton)
-        {
-            // If you have a text block on the button, update it
-            UTextBlock* ButtonText = Cast<UTextBlock>(ProfileButton->GetChildAt(0));
-            if (ButtonText)
-            {
-                ButtonText->SetText(FText::FromString(FString::Printf(TEXT("Profile (%s)"), *CurrentUserProfile.Username)));
-            }
-        }
     }
     else
     {
@@ -619,16 +529,6 @@ void UMainMenuWidget::UpdateUserInfo()
         if (UserRemnantText)
         {
             UserRemnantText->SetText(FText::FromString(TEXT("Remnants: -")));
-        }
-        
-        // Update profile button text
-        if (ProfileButton)
-        {
-            UTextBlock* ButtonText = Cast<UTextBlock>(ProfileButton->GetChildAt(0));
-            if (ButtonText)
-            {
-                ButtonText->SetText(FText::FromString(TEXT("Profile")));
-            }
         }
     }
 }
