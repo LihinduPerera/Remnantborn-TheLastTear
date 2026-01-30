@@ -12,6 +12,7 @@ UMyOnlineGameInstance::UMyOnlineGameInstance()
     DefaultMapPath = TEXT("/Game/Remnantborn/Levels/TestGround");
     DefaultMaxPlayers = 4;
     bIsHosting = false;
+    bIsAuthenticated = false;
 }
 
 void UMyOnlineGameInstance::Init()
@@ -31,6 +32,28 @@ void UMyOnlineGameInstance::Init()
         GEngine->OnNetworkFailure().AddUObject(this, &UMyOnlineGameInstance::HandleNetworkFailure);
         GEngine->OnTravelFailure().AddUObject(this, &UMyOnlineGameInstance::HandleTravelFailure);
     }
+    
+    // Initialize HTTP Manager
+    HttpManager = NewObject<UHttpManager>(this);
+    if (HttpManager)
+    {
+        // Configure base URL (you might want to make this configurable)
+        HttpManager->Initialize(TEXT("http://localhost:3000/api"));
+        
+        // Bind HTTP Manager events
+        HttpManager->OnLoginComplete.AddDynamic(this, &UMyOnlineGameInstance::HandleLoginComplete);
+        HttpManager->OnSignupComplete.AddDynamic(this, &UMyOnlineGameInstance::HandleSignupComplete);
+        HttpManager->OnTokenVerified.AddDynamic(this, &UMyOnlineGameInstance::HandleTokenVerified);
+        HttpManager->OnProfileLoaded.AddDynamic(this, &UMyOnlineGameInstance::HandleProfileLoaded);
+        HttpManager->OnApiError.AddDynamic(this, &UMyOnlineGameInstance::HandleApiError);
+        
+        // Try to load saved authentication
+        LoadSavedAuth();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to create HTTP Manager"));
+    }
 }
 
 void UMyOnlineGameInstance::Shutdown()
@@ -42,8 +65,17 @@ void UMyOnlineGameInstance::Shutdown()
     }
   
     DestroySession();
+    
+    // Clean up HTTP Manager
+    if (HttpManager)
+    {
+        HttpManager->ConditionalBeginDestroy();
+        HttpManager = nullptr;
+    }
+  
     Super::Shutdown();
 }
+
 
 void UMyOnlineGameInstance::CreateSession(FString SessionName, int32 MaxPlayers)
 {
@@ -497,4 +529,184 @@ void UMyOnlineGameInstance::HandleTravelFailure(UWorld* World, ETravelFailure::T
     UE_LOG(LogTemp, Error, TEXT("Travel Failure: %s"), *ErrorString);
     LastError = ErrorString;
     OnJoinSessionFailed.Broadcast(ErrorString);
+}
+
+// === Authentication Methods ===
+
+void UMyOnlineGameInstance::Login(const FString& Email, const FString& Password)
+{
+    if (HttpManager)
+    {
+        HttpManager->Login(Email, Password);
+    }
+    else
+    {
+        FAuthResponse AuthResponse;
+        AuthResponse.bSuccess = false;
+        AuthResponse.ErrorMessage = TEXT("HTTP Manager not initialized");
+        OnAuthLoginComplete.Broadcast(AuthResponse);
+    }
+}
+
+void UMyOnlineGameInstance::Signup(const FString& Email, const FString& Password, const FString& Username)
+{
+    if (HttpManager)
+    {
+        HttpManager->Signup(Email, Password, Username);
+    }
+    else
+    {
+        FAuthResponse AuthResponse;
+        AuthResponse.bSuccess = false;
+        AuthResponse.ErrorMessage = TEXT("HTTP Manager not initialized");
+        OnAuthSignupComplete.Broadcast(AuthResponse);
+    }
+}
+
+void UMyOnlineGameInstance::DevLogin(const FString& Email)
+{
+    if (HttpManager)
+    {
+        HttpManager->DevLogin(Email);
+    }
+    else
+    {
+        FAuthResponse AuthResponse;
+        AuthResponse.bSuccess = false;
+        AuthResponse.ErrorMessage = TEXT("HTTP Manager not initialized");
+        OnAuthLoginComplete.Broadcast(AuthResponse);
+    }
+}
+
+void UMyOnlineGameInstance::Logout()
+{
+    if (HttpManager)
+    {
+        HttpManager->Logout();
+        bIsAuthenticated = false;
+        CurrentUserProfile = FUserProfile();
+    }
+}
+
+void UMyOnlineGameInstance::LoadSavedAuth()
+{
+    if (HttpManager)
+    {
+        if (HttpManager->LoadSavedAuth())
+        {
+            UE_LOG(LogTemp, Log, TEXT("Attempting to load saved authentication..."));
+        }
+    }
+}
+
+void UMyOnlineGameInstance::GetUserProfile()
+{
+    if (HttpManager && bIsAuthenticated && !CurrentUserProfile.UserId.IsEmpty())
+    {
+        HttpManager->GetProfile(CurrentUserProfile.UserId);
+    }
+}
+
+void UMyOnlineGameInstance::UpdateProfile(const FString& Username, const FString& Bio)
+{
+    if (HttpManager && bIsAuthenticated && !CurrentUserProfile.UserId.IsEmpty())
+    {
+        HttpManager->UpdateProfile(CurrentUserProfile.UserId, Username, Bio);
+    }
+}
+
+void UMyOnlineGameInstance::UpdateGameStats(int32 Level, int32 RemnantCount, const FString& Operation)
+{
+    if (HttpManager && bIsAuthenticated && !CurrentUserProfile.UserId.IsEmpty())
+    {
+        HttpManager->UpdateGameStats(CurrentUserProfile.UserId, Level, RemnantCount, Operation);
+    }
+}
+
+bool UMyOnlineGameInstance::IsLoggedIn() const
+{
+    return bIsAuthenticated;
+}
+
+FUserProfile UMyOnlineGameInstance::GetCurrentUserProfile() const
+{
+    return CurrentUserProfile;
+}
+
+FString UMyOnlineGameInstance::GetAuthToken() const
+{
+    if (HttpManager)
+    {
+        return HttpManager->GetAuthToken();
+    }
+    return FString();
+}
+
+// === Event Handlers ===
+
+void UMyOnlineGameInstance::HandleLoginComplete(const FAuthResponse& AuthResponse)
+{
+    if (AuthResponse.bSuccess)
+    {
+        bIsAuthenticated = true;
+        CurrentUserProfile = AuthResponse.UserProfile;
+        UE_LOG(LogTemp, Log, TEXT("Login successful for user: %s"), *CurrentUserProfile.Username);
+    }
+    else
+    {
+        bIsAuthenticated = false;
+        UE_LOG(LogTemp, Warning, TEXT("Login failed: %s"), *AuthResponse.ErrorMessage);
+    }
+    
+    OnAuthLoginComplete.Broadcast(AuthResponse);
+}
+
+void UMyOnlineGameInstance::HandleSignupComplete(const FAuthResponse& AuthResponse)
+{
+    if (AuthResponse.bSuccess)
+    {
+        bIsAuthenticated = true;
+        CurrentUserProfile = AuthResponse.UserProfile;
+        UE_LOG(LogTemp, Log, TEXT("Signup successful for user: %s"), *CurrentUserProfile.Username);
+    }
+    else
+    {
+        bIsAuthenticated = false;
+        UE_LOG(LogTemp, Warning, TEXT("Signup failed: %s"), *AuthResponse.ErrorMessage);
+    }
+    
+    OnAuthSignupComplete.Broadcast(AuthResponse);
+}
+
+void UMyOnlineGameInstance::HandleTokenVerified(const FAuthResponse& AuthResponse)
+{
+    if (AuthResponse.bSuccess)
+    {
+        bIsAuthenticated = true;
+        CurrentUserProfile = AuthResponse.UserProfile;
+        UE_LOG(LogTemp, Log, TEXT("Token verified for user: %s"), *CurrentUserProfile.Username);
+        
+        // Get full profile
+        GetUserProfile();
+    }
+    else
+    {
+        bIsAuthenticated = false;
+        UE_LOG(LogTemp, Warning, TEXT("Token verification failed: %s"), *AuthResponse.ErrorMessage);
+    }
+}
+
+void UMyOnlineGameInstance::HandleProfileLoaded(const FUserProfile& UserProfile)
+{
+    CurrentUserProfile = UserProfile;
+    OnProfileUpdated.Broadcast(UserProfile);
+    
+    UE_LOG(LogTemp, Log, TEXT("Profile loaded: %s (Level: %d, Remnants: %d)"),
+           *UserProfile.Username, UserProfile.Level, UserProfile.RemnantCount);
+}
+
+void UMyOnlineGameInstance::HandleApiError(const FString& ErrorMessage)
+{
+    UE_LOG(LogTemp, Error, TEXT("API Error: %s"), *ErrorMessage);
+    LastError = ErrorMessage;
 }

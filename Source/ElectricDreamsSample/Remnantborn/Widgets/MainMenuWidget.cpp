@@ -1,9 +1,15 @@
+// FILE PATH: D:\projects\UnrealProjects\Remnantborn\Source\ElectricDreamsSample\Remnantborn\Widgets\MainMenuWidget.cpp
 #include "MainMenuWidget.h"
 #include "ElectricDreamsSample/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 #include "Components/Button.h"
 #include "Components/EditableTextBox.h"
 #include "Components/ListView.h"
 #include "Components/TextBlock.h"
+#include "Components/WidgetSwitcher.h"
+#include "Components/VerticalBox.h"
+#include "Auth/LoginWidget.h"
+#include "Auth/UserProfileWidget.h"
+#include "SessionInfo/SessionInfoObject.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "TimerManager.h"
 
@@ -11,7 +17,7 @@ void UMainMenuWidget::NativeConstruct()
 {
     Super::NativeConstruct();
 
-    // Bind button events
+    // Bind multiplayer button events
     if (HostButton)
     {
         HostButton->OnClicked.AddDynamic(this, &UMainMenuWidget::OnHostButtonClicked);
@@ -37,6 +43,17 @@ void UMainMenuWidget::NativeConstruct()
         QuitButton->OnClicked.AddDynamic(this, &UMainMenuWidget::OnQuitButtonClicked);
     }
 
+    // Bind auth button events
+    if (LoginButton)
+    {
+        LoginButton->OnClicked.AddDynamic(this, &UMainMenuWidget::OnLoginButtonClicked);
+    }
+    
+    if (ProfileButton)
+    {
+        ProfileButton->OnClicked.AddDynamic(this, &UMainMenuWidget::OnProfileButtonClicked);
+    }
+
     // Bind ListView events
     if (SessionListView)
     {
@@ -49,10 +66,24 @@ void UMainMenuWidget::NativeConstruct()
     UMyOnlineGameInstance *GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
     if (GameInstance)
     {
+        // Multiplayer events
         GameInstance->OnSessionSearchCompleted.AddDynamic(this, &UMainMenuWidget::HandleSessionSearchCompleted);
         GameInstance->OnCreateSessionSuccess.AddDynamic(this, &UMainMenuWidget::HandleCreateSessionSuccess);
         GameInstance->OnCreateSessionFailed.AddDynamic(this, &UMainMenuWidget::HandleCreateSessionFailed);
         GameInstance->OnJoinSessionFailed.AddDynamic(this, &UMainMenuWidget::HandleJoinSessionFailed);
+        
+        // Authentication events
+        GameInstance->OnAuthLoginComplete.AddDynamic(this, &UMainMenuWidget::HandleLoginComplete);
+        GameInstance->OnAuthSignupComplete.AddDynamic(this, &UMainMenuWidget::HandleSignupComplete);
+        GameInstance->OnProfileUpdated.AddDynamic(this, &UMainMenuWidget::HandleProfileUpdated);
+        
+        // Check if already logged in
+        bIsLoggedIn = GameInstance->IsLoggedIn();
+        if (bIsLoggedIn)
+        {
+            CurrentUserProfile = GameInstance->GetCurrentUserProfile();
+            UpdateUserInfo();
+        }
     }
 
     SelectedSessionIndex = -1;
@@ -73,15 +104,32 @@ void UMainMenuWidget::NativeConstruct()
     {
         ServerNameTextBox->SetText(FText::FromString("MyLANServer"));
     }
+    
+    // Update UI based on login state
+    UpdateUserInfo();
 }
 
 void UMainMenuWidget::OnHostButtonClicked()
 {
+    if (!bIsLoggedIn)
+    {
+        if (ErrorText)
+        {
+            ErrorText->SetText(FText::FromString("Please login to host a game"));
+            ErrorText->SetVisibility(ESlateVisibility::Visible);
+            GetWorld()->GetTimerManager().SetTimer(ErrorClearTimer, this, &UMainMenuWidget::ClearErrorMessage, 3.0f, false);
+        }
+        return;
+    }
+    
     FString SessionName = "MyLANServer";
     if (ServerNameTextBox && !ServerNameTextBox->GetText().IsEmpty())
     {
         SessionName = ServerNameTextBox->GetText().ToString();
     }
+    
+    // Include username in session name
+    SessionName = FString::Printf(TEXT("%s's Game"), *CurrentUserProfile.Username);
 
     UMyOnlineGameInstance *GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
     if (GameInstance)
@@ -202,6 +250,74 @@ void UMainMenuWidget::OnQuitButtonClicked()
     UKismetSystemLibrary::QuitGame(GetWorld(), GetWorld()->GetFirstPlayerController(), EQuitPreference::Quit, false);
 }
 
+void UMainMenuWidget::OnLoginButtonClicked()
+{
+    if (LoginWidgetClass)
+    {
+        // Remove existing login widget
+        if (LoginWidget)
+        {
+            LoginWidget->RemoveFromParent();
+            LoginWidget = nullptr;
+        }
+        
+        // Create new login widget
+        LoginWidget = CreateWidget<ULoginWidget>(GetWorld(), LoginWidgetClass);
+        if (LoginWidget)
+        {
+            LoginWidget->AddToViewport();
+            
+            // Center the widget
+            FVector2D ViewportSize;
+            if (GEngine && GEngine->GameViewport)
+            {
+                GEngine->GameViewport->GetViewportSize(ViewportSize);
+                LoginWidget->SetPositionInViewport(FVector2D(
+                    (ViewportSize.X - LoginWidget->GetDesiredSize().X) / 2,
+                    (ViewportSize.Y - LoginWidget->GetDesiredSize().Y) / 2
+                ));
+            }
+        }
+    }
+}
+
+void UMainMenuWidget::OnProfileButtonClicked()
+{
+    if (ProfileWidgetClass && bIsLoggedIn)
+    {
+        // Remove existing profile widget
+        if (ProfileWidget)
+        {
+            ProfileWidget->RemoveFromParent();
+            ProfileWidget = nullptr;
+        }
+        
+        // Create new profile widget
+        ProfileWidget = CreateWidget<UUserProfileWidget>(GetWorld(), ProfileWidgetClass);
+        if (ProfileWidget)
+        {
+            ProfileWidget->AddToViewport();
+            ProfileWidget->UpdateProfile(
+                CurrentUserProfile.Username,
+                CurrentUserProfile.Level,
+                CurrentUserProfile.RemnantCount,
+                CurrentUserProfile.AvatarUrl
+            );
+            
+            // Center the widget
+            FVector2D ViewportSize;
+            if (GEngine && GEngine->GameViewport)
+            {
+                GEngine->GameViewport->GetViewportSize(ViewportSize);
+                ProfileWidget->SetPositionInViewport(FVector2D(
+                    (ViewportSize.X - ProfileWidget->GetDesiredSize().X) / 2,
+                    (ViewportSize.Y - ProfileWidget->GetDesiredSize().Y) / 2
+                ));
+            }
+        }
+    }
+}
+
 void UMainMenuWidget::OnSessionSelected(UObject *Item)
 {
     if (USessionInfoObject *SessionInfo = Cast<USessionInfoObject>(Item))
@@ -295,6 +411,46 @@ void UMainMenuWidget::HandleJoinSessionFailed(const FString &ErrorMessage)
     }
 }
 
+void UMainMenuWidget::HandleLoginComplete(const FAuthResponse& AuthResponse)
+{
+    if (AuthResponse.bSuccess)
+    {
+        bIsLoggedIn = true;
+        CurrentUserProfile = AuthResponse.UserProfile;
+        UpdateUserInfo();
+        
+        if (StatusText)
+        {
+            StatusText->SetText(FText::FromString("Login successful!"));
+        }
+    }
+    else
+    {
+        if (ErrorText)
+        {
+            ErrorText->SetText(FText::FromString(AuthResponse.ErrorMessage));
+            ErrorText->SetVisibility(ESlateVisibility::Visible);
+            GetWorld()->GetTimerManager().SetTimer(ErrorClearTimer, this, &UMainMenuWidget::ClearErrorMessage, 5.0f, false);
+        }
+    }
+}
+
+void UMainMenuWidget::HandleSignupComplete(const FAuthResponse& AuthResponse)
+{
+    HandleLoginComplete(AuthResponse); // Same handling as login
+}
+
+void UMainMenuWidget::HandleProfileUpdated(const FUserProfile& UserProfile)
+{
+    CurrentUserProfile = UserProfile;
+    UpdateUserInfo();
+    
+    if (StatusText)
+    {
+        StatusText->SetText(FText::FromString("Profile updated"));
+    }
+}
+
 void UMainMenuWidget::UpdateSessionList()
 {
     UMyOnlineGameInstance *GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
@@ -303,7 +459,7 @@ void UMainMenuWidget::UpdateSessionList()
         return;
     }
 
-    // Clear old items - no need to destroy manually, ListView will handle it
+    // Clear old items
     SessionListItems.Empty();
     SessionListView->ClearListItems();
 
@@ -338,9 +494,6 @@ void UMainMenuWidget::UpdateSessionList()
 
             SessionListItems.Add(ListItem);
             SessionListView->AddItem(ListItem);
-
-            UE_LOG(LogTemp, Log, TEXT("Added session to list: %s, Players: %d/%d, Ping: %d"),
-                   *SessionName, CurrentPlayers, MaxPlayers, PingValue);
         }
     }
 
@@ -369,5 +522,69 @@ void UMainMenuWidget::ClearErrorMessage()
     if (ErrorText)
     {
         ErrorText->SetVisibility(ESlateVisibility::Hidden);
+    }
+}
+
+void UMainMenuWidget::UpdateUserInfo()
+{
+    if (bIsLoggedIn)
+    {
+        // Show user info panel
+        if (UserInfoPanel)
+        {
+            UserInfoPanel->SetVisibility(ESlateVisibility::Visible);
+        }
+        
+        // Hide login panel
+        if (LoginPanel)
+        {
+            LoginPanel->SetVisibility(ESlateVisibility::Collapsed);
+        }
+        
+        // Update user info texts
+        if (WelcomeText)
+        {
+            WelcomeText->SetText(FText::FromString(FString::Printf(TEXT("Welcome, %s!"), *CurrentUserProfile.Username)));
+        }
+        
+        if (UserLevelText)
+        {
+            UserLevelText->SetText(FText::FromString(FString::Printf(TEXT("Level: %d"), CurrentUserProfile.Level)));
+        }
+        
+        if (UserRemnantText)
+        {
+            UserRemnantText->SetText(FText::FromString(FString::Printf(TEXT("Remnants: %d"), CurrentUserProfile.RemnantCount)));
+        }
+    }
+    else
+    {
+        // Show login panel
+        if (LoginPanel)
+        {
+            LoginPanel->SetVisibility(ESlateVisibility::Visible);
+        }
+        
+        // Hide user info panel
+        if (UserInfoPanel)
+        {
+            UserInfoPanel->SetVisibility(ESlateVisibility::Collapsed);
+        }
+        
+        // Clear user info texts
+        if (WelcomeText)
+        {
+            WelcomeText->SetText(FText::FromString(TEXT("Welcome, Guest!")));
+        }
+        
+        if (UserLevelText)
+        {
+            UserLevelText->SetText(FText::FromString(TEXT("Level: -")));
+        }
+        
+        if (UserRemnantText)
+        {
+            UserRemnantText->SetText(FText::FromString(TEXT("Remnants: -")));
+        }
     }
 }

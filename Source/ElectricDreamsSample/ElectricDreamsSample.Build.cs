@@ -34,7 +34,11 @@ public class ElectricDreamsSample : ModuleRules
 			"AudioModulation",
 			"GameplayAbilities",
 			"GameplayTasks",
-			"GameplayTags"
+			"GameplayTags",
+			"HTTP",
+			"Json",
+			"JsonUtilities",
+			"WebSockets"
 		});
 		
 		if (Target.Configuration == UnrealTargetConfiguration.Shipping)

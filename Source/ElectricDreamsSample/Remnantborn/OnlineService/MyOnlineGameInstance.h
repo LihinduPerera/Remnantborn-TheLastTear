@@ -5,6 +5,7 @@
 #include "Interfaces/OnlineSessionInterface.h"
 #include "OnlineSessionSettings.h"
 #include "FindSessionsCallbackProxy.h"
+#include "HttpManager/HttpManager.h"  // Added
 #include "MyOnlineGameInstance.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSessionSearchCompleted, bool, bSuccess);
@@ -12,6 +13,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnCreateSessionSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCreateSessionFailed, const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnJoinSessionFailed, const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSessionDestroyed);
+// Added authentication delegates
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAuthLoginComplete, const FAuthResponse&, AuthResponse);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAuthSignupComplete, const FAuthResponse&, AuthResponse);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnProfileUpdated, const FUserProfile&, UserProfile);
 
 USTRUCT(BlueprintType)
 struct FSessionInfo
@@ -42,7 +47,7 @@ class ELECTRICDREAMSSAMPLE_API UMyOnlineGameInstance : public UGameInstance
 public:
     UMyOnlineGameInstance();
     
-    // Session Functions
+    // === Multiplayer Functions ===
     UFUNCTION(BlueprintCallable, Category = "Multiplayer")
     void CreateSession(FString SessionName = "LAN_Game", int32 MaxPlayers = 4);
     
@@ -70,7 +75,42 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Multiplayer")
     void LeaveGame();
     
-    // Blueprint Events
+    // === Authentication Functions ===
+    UFUNCTION(BlueprintCallable, Category = "Authentication")
+    void Login(const FString& Email, const FString& Password);
+    
+    UFUNCTION(BlueprintCallable, Category = "Authentication")
+    void Signup(const FString& Email, const FString& Password, const FString& Username);
+    
+    UFUNCTION(BlueprintCallable, Category = "Authentication")
+    void DevLogin(const FString& Email);
+    
+    UFUNCTION(BlueprintCallable, Category = "Authentication")
+    void Logout();
+    
+    UFUNCTION(BlueprintCallable, Category = "Authentication")
+    void LoadSavedAuth();
+    
+    UFUNCTION(BlueprintCallable, Category = "Authentication")
+    void GetUserProfile();
+    
+    UFUNCTION(BlueprintCallable, Category = "Authentication")
+    void UpdateProfile(const FString& Username, const FString& Bio);
+    
+    UFUNCTION(BlueprintCallable, Category = "Authentication")
+    void UpdateGameStats(int32 Level, int32 RemnantCount, const FString& Operation = "set");
+    
+    // === Getters ===
+    UFUNCTION(BlueprintPure, Category = "Authentication")
+    bool IsLoggedIn() const;
+    
+    UFUNCTION(BlueprintPure, Category = "Authentication")
+    FUserProfile GetCurrentUserProfile() const;
+    
+    UFUNCTION(BlueprintPure, Category = "Authentication")
+    FString GetAuthToken() const;
+    
+    // === Multiplayer Events ===
     UPROPERTY(BlueprintAssignable, Category = "Multiplayer|Events")
     FOnSessionSearchCompleted OnSessionSearchCompleted;
     
@@ -86,7 +126,17 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Multiplayer|Events")
     FOnSessionDestroyed OnSessionDestroyed;
     
-    // Data for Blueprint
+    // === Authentication Events ===
+    UPROPERTY(BlueprintAssignable, Category = "Authentication|Events")
+    FOnAuthLoginComplete OnAuthLoginComplete;
+
+    UPROPERTY(BlueprintAssignable, Category = "Authentication|Events")
+    FOnAuthSignupComplete OnAuthSignupComplete;
+    
+    UPROPERTY(BlueprintAssignable, Category = "Profile|Events")
+    FOnProfileUpdated OnProfileUpdated;
+    
+    // === Data for Blueprint ===
     UPROPERTY(BlueprintReadOnly, Category = "Multiplayer")
     TArray<FSessionInfo> SessionSearchResults;
     
@@ -104,7 +154,7 @@ protected:
     virtual void Shutdown() override;
     
 private:
-    // Session Delegates
+    // === Multiplayer ===
     void OnCreateSessionComplete(FName SessionName, bool bSuccess);
     void OnFindSessionsComplete(bool bSuccess);
     void OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
@@ -113,7 +163,6 @@ private:
     void HandleNetworkFailure(UWorld* World, UNetDriver* NetDriver, ENetworkFailure::Type FailureType, const FString& ErrorString);
     void HandleTravelFailure(UWorld* World, ETravelFailure::Type FailureType, const FString& ErrorString);
     
-    // Connection Functions
     void HostGame();
     void TravelToServer(const FString& Address);
     
@@ -137,4 +186,19 @@ private:
     FString PendingSessionName;
     int32 PendingMaxPlayers;
     bool bIsHosting = false;
+    
+    // === Authentication ===
+    UPROPERTY()
+    UHttpManager* HttpManager;
+    
+    // Auth event handlers
+    void HandleLoginComplete(const FAuthResponse& AuthResponse);
+    void HandleSignupComplete(const FAuthResponse& AuthResponse);
+    void HandleTokenVerified(const FAuthResponse& AuthResponse);
+    void HandleProfileLoaded(const FUserProfile& UserProfile);
+    void HandleApiError(const FString& ErrorMessage);
+    
+    // Current user data
+    FUserProfile CurrentUserProfile;
+    bool bIsAuthenticated = false;
 };

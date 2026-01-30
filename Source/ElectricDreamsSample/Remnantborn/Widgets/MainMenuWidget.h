@@ -1,3 +1,4 @@
+// FILE PATH: D:\projects\UnrealProjects\Remnantborn\Source\ElectricDreamsSample\Remnantborn\Widgets\MainMenuWidget.h
 #pragma once
 
 #include "CoreMinimal.h"
@@ -6,11 +7,13 @@
 #include "Components/EditableTextBox.h"
 #include "Components/ListView.h"
 #include "Components/TextBlock.h"
+#include "Components/WidgetSwitcher.h"
+#include "Components/VerticalBox.h"
+#include "Auth/LoginWidget.h"
+#include "Auth/UserProfileWidget.h"
+#include "ElectricDreamsSample/Remnantborn/OnlineService/HttpManager/HttpManager.h"
 #include "SessionInfo/SessionInfoObject.h"
 #include "MainMenuWidget.generated.h"
-
-// Forward declaration
-class UMyOnlineGameInstance;
 
 UCLASS()
 class ELECTRICDREAMSSAMPLE_API UMainMenuWidget : public UUserWidget
@@ -21,6 +24,7 @@ public:
 	virtual void NativeConstruct() override;
     
 protected:
+	// === Multiplayer Handlers ===
 	UFUNCTION()
 	void OnHostButtonClicked();
     
@@ -43,6 +47,13 @@ protected:
 	UFUNCTION()
 	void OnSessionDoubleClicked(UObject* Item);
     
+	// === Authentication Handlers ===
+	UFUNCTION()
+	void OnLoginButtonClicked();
+    
+	UFUNCTION()
+	void OnProfileButtonClicked();
+    
 	// Callbacks from GameInstance
 	UFUNCTION()
 	void HandleSessionSearchCompleted(bool bSuccess);
@@ -56,13 +67,21 @@ protected:
 	UFUNCTION()
 	void HandleJoinSessionFailed(const FString& ErrorMessage);
     
-	// Helper function to update list
+	UFUNCTION()
+	void HandleLoginComplete(const FAuthResponse& AuthResponse);
+    
+	UFUNCTION()
+	void HandleSignupComplete(const FAuthResponse& AuthResponse);
+    
+	UFUNCTION()
+	void HandleProfileUpdated(const FUserProfile& UserProfile);
+    
+	// Helper functions
 	void UpdateSessionList();
-    
-	// Clear error message with timer
 	void ClearErrorMessage();
+	void UpdateUserInfo();
     
-	// Widget Components
+	// Widget Components - Multiplayer
 	UPROPERTY(meta = (BindWidget))
 	UButton* HostButton;
     
@@ -87,15 +106,56 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	UListView* SessionListView;
     
+	// Widget Components - Authentication
+	UPROPERTY(meta = (BindWidget))
+	UButton* LoginButton;
+    
+	UPROPERTY(meta = (BindWidget))
+	UButton* ProfileButton;
+    
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* WelcomeText;
+    
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* UserLevelText;
+    
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* UserRemnantText;
+    
+	UPROPERTY(meta = (BindWidget))
+	UVerticalBox* UserInfoPanel;
+    
+	UPROPERTY(meta = (BindWidget))
+	UVerticalBox* LoginPanel;
+    
+	// Common Widgets
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* StatusText;
     
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* ErrorText;
     
+	// Widget classes
+	UPROPERTY(EditAnywhere, Category = "Widgets")
+	TSubclassOf<ULoginWidget> LoginWidgetClass;
+    
+	UPROPERTY(EditAnywhere, Category = "Widgets")
+	TSubclassOf<UUserProfileWidget> ProfileWidgetClass;
+    
 private:
 	int32 SelectedSessionIndex;
 	TArray<USessionInfoObject*> SessionListItems;
     
 	FTimerHandle ErrorClearTimer;
+    
+	// Current user data
+	FUserProfile CurrentUserProfile;
+	bool bIsLoggedIn = false;
+    
+	// Widget instances
+	UPROPERTY()
+	ULoginWidget* LoginWidget;
+    
+	UPROPERTY()
+	UUserProfileWidget* ProfileWidget;
 };
