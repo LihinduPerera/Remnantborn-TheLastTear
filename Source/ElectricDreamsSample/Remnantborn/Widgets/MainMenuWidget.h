@@ -6,102 +6,96 @@
 #include "Components/EditableTextBox.h"
 #include "Components/ListView.h"
 #include "Components/TextBlock.h"
+#include "SessionInfo/SessionInfoObject.h"
 #include "MainMenuWidget.generated.h"
 
 // Forward declaration
 class UMyOnlineGameInstance;
 
 UCLASS()
-class USessionInfoObject : public UObject
-{
-    GENERATED_BODY()
-    
-public:
-    UPROPERTY(BlueprintReadOnly)
-    FString SessionName;
-    
-    UPROPERTY(BlueprintReadOnly)
-    FString PlayerCount;
-    
-    UPROPERTY(BlueprintReadOnly)
-    FString Ping;
-    
-    UPROPERTY(BlueprintReadOnly)
-    int32 SessionIndex;
-};
-
-UCLASS()
 class ELECTRICDREAMSSAMPLE_API UMainMenuWidget : public UUserWidget
 {
-    GENERATED_BODY()
+	GENERATED_BODY()
     
 public:
-    virtual void NativeConstruct() override;
+	virtual void NativeConstruct() override;
     
 protected:
-    UFUNCTION()
-    void OnHostButtonClicked();
+	UFUNCTION()
+	void OnHostButtonClicked();
     
-    UFUNCTION()
-    void OnFindSessionsButtonClicked();
+	UFUNCTION()
+	void OnFindSessionsButtonClicked();
     
-    UFUNCTION()
-    void OnJoinButtonClicked();
+	UFUNCTION()
+	void OnJoinButtonClicked();
     
-    UFUNCTION()
-    void OnDirectJoinButtonClicked();
+	UFUNCTION()
+	void OnDirectJoinButtonClicked();
     
-    UFUNCTION()
-    void OnQuitButtonClicked();
+	UFUNCTION()
+	void OnQuitButtonClicked();
     
-    UFUNCTION()
-    void OnSessionSelected(UObject* Item);
+	// ListView callbacks
+	UFUNCTION()
+	void OnSessionSelected(UObject* Item);
     
-    // Callbacks
-    UFUNCTION()
-    void HandleSessionSearchCompleted(bool bSuccess);
+	UFUNCTION()
+	void OnSessionDoubleClicked(UObject* Item);
     
-    UFUNCTION()
-    void HandleCreateSessionSuccess();
+	// Callbacks from GameInstance
+	UFUNCTION()
+	void HandleSessionSearchCompleted(bool bSuccess);
     
-    UFUNCTION()
-    void HandleCreateSessionFailed(const FString& ErrorMessage);
+	UFUNCTION()
+	void HandleCreateSessionSuccess();
     
-    UFUNCTION()
-    void HandleJoinSessionFailed(const FString& ErrorMessage);
+	UFUNCTION()
+	void HandleCreateSessionFailed(const FString& ErrorMessage);
     
-    // Widget Components
-    UPROPERTY(meta = (BindWidget))
-    UButton* HostButton;
+	UFUNCTION()
+	void HandleJoinSessionFailed(const FString& ErrorMessage);
     
-    UPROPERTY(meta = (BindWidget))
-    UButton* FindSessionsButton;
+	// Helper function to update list
+	void UpdateSessionList();
     
-    UPROPERTY(meta = (BindWidget))
-    UButton* JoinButton;
+	// Clear error message with timer
+	void ClearErrorMessage();
     
-    UPROPERTY(meta = (BindWidget))
-    UButton* DirectJoinButton;
+	// Widget Components
+	UPROPERTY(meta = (BindWidget))
+	UButton* HostButton;
     
-    UPROPERTY(meta = (BindWidget))
-    UButton* QuitButton;
+	UPROPERTY(meta = (BindWidget))
+	UButton* FindSessionsButton;
     
-    UPROPERTY(meta = (BindWidget))
-    UEditableTextBox* ServerNameTextBox;
+	UPROPERTY(meta = (BindWidget))
+	UButton* JoinButton;
     
-    UPROPERTY(meta = (BindWidget))
-    UEditableTextBox* DirectIPTextBox;
+	UPROPERTY(meta = (BindWidget))
+	UButton* DirectJoinButton;
     
-    UPROPERTY(meta = (BindWidget))
-    UListView* SessionListView;
+	UPROPERTY(meta = (BindWidget))
+	UButton* QuitButton;
     
-    UPROPERTY(meta = (BindWidget))
-    UTextBlock* StatusText;
+	UPROPERTY(meta = (BindWidget))
+	UEditableTextBox* ServerNameTextBox;
     
-    UPROPERTY(meta = (BindWidget))
-    UTextBlock* ErrorText;
+	UPROPERTY(meta = (BindWidget))
+	UEditableTextBox* DirectIPTextBox;
+    
+	UPROPERTY(meta = (BindWidget))
+	UListView* SessionListView;
+    
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* StatusText;
+    
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* ErrorText;
     
 private:
-    int32 SelectedSessionIndex;
-    TArray<USessionInfoObject*> SessionListItems;
+	int32 SelectedSessionIndex;
+	TArray<USessionInfoObject*> SessionListItems;
+    
+	FTimerHandle ErrorClearTimer;
 };

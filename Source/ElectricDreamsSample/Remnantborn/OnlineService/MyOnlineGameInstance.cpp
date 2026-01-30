@@ -17,14 +17,14 @@ UMyOnlineGameInstance::UMyOnlineGameInstance()
 void UMyOnlineGameInstance::Init()
 {
     Super::Init();
-    
+  
     // Initialize Online Subsystem
     IOnlineSubsystem* OnlineSub = Online::GetSubsystem(GetWorld());
     if (OnlineSub)
     {
         UE_LOG(LogTemp, Log, TEXT("Online Subsystem: %s"), *OnlineSub->GetSubsystemName().ToString());
     }
-    
+  
     // Bind to network events
     if (GEngine)
     {
@@ -40,7 +40,7 @@ void UMyOnlineGameInstance::Shutdown()
         GEngine->OnNetworkFailure().RemoveAll(this);
         GEngine->OnTravelFailure().RemoveAll(this);
     }
-    
+  
     DestroySession();
     Super::Shutdown();
 }
@@ -50,7 +50,7 @@ void UMyOnlineGameInstance::CreateSession(FString SessionName, int32 MaxPlayers)
     PendingSessionName = SessionName;
     PendingMaxPlayers = MaxPlayers;
     LastError = "";
-    
+  
     IOnlineSubsystem* OnlineSub = Online::GetSubsystem(GetWorld());
     if (!OnlineSub)
     {
@@ -58,7 +58,7 @@ void UMyOnlineGameInstance::CreateSession(FString SessionName, int32 MaxPlayers)
         OnCreateSessionFailed.Broadcast(LastError);
         return;
     }
-    
+  
     SessionInterface = OnlineSub->GetSessionInterface();
     if (!SessionInterface.IsValid())
     {
@@ -66,33 +66,33 @@ void UMyOnlineGameInstance::CreateSession(FString SessionName, int32 MaxPlayers)
         OnCreateSessionFailed.Broadcast(LastError);
         return;
     }
-    
+  
     // Destroy existing session if any
     if (SessionInterface->GetNamedSession(NAME_GameSession))
     {
         UE_LOG(LogTemp, Warning, TEXT("Destroying existing session before creating new one"));
         DestroySession();
     }
-    
+  
     // Setup LAN session settings
     FOnlineSessionSettings SessionSettings;
-    SessionSettings.bIsLANMatch = true;              // CRITICAL for LAN
-    SessionSettings.bIsDedicated = false;           // Listen server
-    SessionSettings.bUsesPresence = true;           // Needed for LAN discovery
-    SessionSettings.bShouldAdvertise = true;        // Make it visible
-    SessionSettings.bAllowJoinInProgress = true;    // Allow late joins
+    SessionSettings.bIsLANMatch = true; // CRITICAL for LAN
+    SessionSettings.bIsDedicated = false; // Listen server
+    SessionSettings.bUsesPresence = true; // Needed for LAN discovery
+    SessionSettings.bShouldAdvertise = true; // Make it visible
+    SessionSettings.bAllowJoinInProgress = true; // Allow late joins
     SessionSettings.bAllowInvites = true;
     SessionSettings.NumPublicConnections = MaxPlayers;
     SessionSettings.NumPrivateConnections = 0;
-    
-    // Set custom parameters
-    SessionSettings.Set(FName("SESSION_NAME"), SessionName, EOnlineDataAdvertisementType::ViaOnlineService);
-    SessionSettings.Set(FName("GAME_VERSION"), FString("1.0"), EOnlineDataAdvertisementType::ViaOnlineService);
-    
+  
+    // Set custom parameters - FIXED: Using proper FVariantData type
+    SessionSettings.Set(FName(TEXT("SESSION_NAME")), FOnlineSessionSetting(SessionName, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing));
+    SessionSettings.Set(FName(TEXT("GAME_VERSION")), FOnlineSessionSetting(FString("1.0"), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing));
+  
     // Bind delegate
     CreateSessionCompleteDelegate = FOnCreateSessionCompleteDelegate::CreateUObject(this, &UMyOnlineGameInstance::OnCreateSessionComplete);
     CreateSessionCompleteDelegateHandle = SessionInterface->AddOnCreateSessionCompleteDelegate_Handle(CreateSessionCompleteDelegate);
-    
+  
     // Create session with first local player
     ULocalPlayer* LocalPlayer = GetFirstGamePlayer();
     if (!LocalPlayer)
@@ -102,7 +102,7 @@ void UMyOnlineGameInstance::CreateSession(FString SessionName, int32 MaxPlayers)
         OnCreateSessionFailed.Broadcast(LastError);
         return;
     }
-    
+  
     if (!SessionInterface->CreateSession(*LocalPlayer->GetPreferredUniqueNetId(), NAME_GameSession, SessionSettings))
     {
         LastError = "Failed to create session";
@@ -121,20 +121,20 @@ void UMyOnlineGameInstance::OnCreateSessionComplete(FName SessionName, bool bSuc
     {
         SessionInterface->ClearOnCreateSessionCompleteDelegate_Handle(CreateSessionCompleteDelegateHandle);
     }
-    
+  
     if (bSuccess)
     {
         UE_LOG(LogTemp, Log, TEXT("Session created successfully: %s"), *SessionName.ToString());
         bIsHosting = true;
         OnCreateSessionSuccess.Broadcast();
-        
+      
         // Travel to the game map as listen server
         if (!DefaultMapPath.IsEmpty())
         {
             FString TravelPath = DefaultMapPath;
             TravelPath.RemoveFromStart(GetWorld()->StreamingLevelsPrefix);
             TravelPath += TEXT("?listen");
-            
+          
             UE_LOG(LogTemp, Log, TEXT("Server traveling to: %s"), *TravelPath);
             GetWorld()->ServerTravel(TravelPath);
         }
@@ -151,7 +151,7 @@ void UMyOnlineGameInstance::FindSessions()
 {
     LastError = "";
     SessionSearchResults.Empty();
-    
+  
     IOnlineSubsystem* OnlineSub = Online::GetSubsystem(GetWorld());
     if (!OnlineSub)
     {
@@ -159,7 +159,7 @@ void UMyOnlineGameInstance::FindSessions()
         OnSessionSearchCompleted.Broadcast(false);
         return;
     }
-    
+  
     SessionInterface = OnlineSub->GetSessionInterface();
     if (!SessionInterface.IsValid())
     {
@@ -167,17 +167,17 @@ void UMyOnlineGameInstance::FindSessions()
         OnSessionSearchCompleted.Broadcast(false);
         return;
     }
-    
+  
     // Setup search for LAN games
     SessionSearch = MakeShareable(new FOnlineSessionSearch());
-    SessionSearch->bIsLanQuery = true;              // CRITICAL for LAN
+    SessionSearch->bIsLanQuery = true; // CRITICAL for LAN
     SessionSearch->MaxSearchResults = 20;
     SessionSearch->TimeoutInSeconds = 5;
-    
+  
     // Bind delegate
     FindSessionsCompleteDelegate = FOnFindSessionsCompleteDelegate::CreateUObject(this, &UMyOnlineGameInstance::OnFindSessionsComplete);
     FindSessionsCompleteDelegateHandle = SessionInterface->AddOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegate);
-    
+  
     ULocalPlayer* LocalPlayer = GetFirstGamePlayer();
     if (!LocalPlayer)
     {
@@ -185,7 +185,7 @@ void UMyOnlineGameInstance::FindSessions()
         OnSessionSearchCompleted.Broadcast(false);
         return;
     }
-    
+  
     UE_LOG(LogTemp, Log, TEXT("Starting LAN session search..."));
     if (!SessionInterface->FindSessions(*LocalPlayer->GetPreferredUniqueNetId(), SessionSearch.ToSharedRef()))
     {
@@ -201,45 +201,67 @@ void UMyOnlineGameInstance::OnFindSessionsComplete(bool bSuccess)
     {
         SessionInterface->ClearOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegateHandle);
     }
-    
+  
     if (bSuccess && SessionSearch.IsValid())
     {
         UE_LOG(LogTemp, Log, TEXT("Found %d sessions"), SessionSearch->SearchResults.Num());
+      
+        // Clear previous results
+        SessionSearchResults.Empty();
         
         for (const FOnlineSessionSearchResult& SearchResult : SessionSearch->SearchResults)
         {
             FSessionInfo SessionInfo;
+          
+            // Extract session name - FIXED: Properly extract session settings
+            FString SessionName = TEXT("Unknown Session");
             
-            // Extract session name
-            FString SessionName;
-            if (SearchResult.Session.SessionSettings.Get(FName("SESSION_NAME"), SessionName))
+            // First try to get the custom session name
+            if (SearchResult.Session.SessionSettings.Get(FName(TEXT("SESSION_NAME")), SessionName))
             {
-                SessionInfo.SessionName = SessionName;
+                // Successfully got custom name
             }
             else
             {
-                SessionInfo.SessionName = FString::Printf(TEXT("Session_%d"), SessionSearchResults.Num());
+                // Fallback: Use the OwningUserName as session name
+                SessionName = SearchResult.Session.OwningUserName;
+                if (SessionName.IsEmpty())
+                {
+                    SessionName = FString::Printf(TEXT("Session_%d"), SessionSearchResults.Num() + 1);
+                }
             }
             
+            SessionInfo.SessionName = SessionName;
+          
             // Get player counts
-            SessionInfo.CurrentPlayers = SearchResult.Session.NumOpenPublicConnections;
             SessionInfo.MaxPlayers = SearchResult.Session.SessionSettings.NumPublicConnections;
-            SessionInfo.Ping = SearchResult.PingInMs;
-            SessionInfo.SessionResult.OnlineResult = SearchResult;
+            SessionInfo.CurrentPlayers = SessionInfo.MaxPlayers - SearchResult.Session.NumOpenPublicConnections;
             
+            // Ensure valid values
+            if (SessionInfo.CurrentPlayers < 0) SessionInfo.CurrentPlayers = 0;
+            if (SessionInfo.MaxPlayers <= 0) SessionInfo.MaxPlayers = 4; // Default
+            
+            // Get ping - use actual ping value
+            SessionInfo.Ping = SearchResult.PingInMs;
+            
+            // Store the session result
+            SessionInfo.SessionResult.OnlineResult = SearchResult;
+          
             SessionSearchResults.Add(SessionInfo);
-            UE_LOG(LogTemp, Log, TEXT("Found session: %s (%d/%d players)"), 
-                *SessionInfo.SessionName, 
-                SessionInfo.MaxPlayers - SessionInfo.CurrentPlayers,
-                SessionInfo.MaxPlayers);
+            UE_LOG(LogTemp, Log, TEXT("Found session: %s (%d/%d players, %d ms ping)"),
+                *SessionInfo.SessionName,
+                SessionInfo.CurrentPlayers,
+                SessionInfo.MaxPlayers,
+                SessionInfo.Ping);
         }
-        
+      
         OnSessionSearchCompleted.Broadcast(true);
     }
     else
     {
         LastError = "No sessions found or search failed";
-        UE_LOG(LogTemp, Warning, TEXT("Session search failed"));
+        UE_LOG(LogTemp, Warning, TEXT("Session search failed or no sessions found"));
+        SessionSearchResults.Empty();
         OnSessionSearchCompleted.Broadcast(false);
     }
 }
@@ -260,7 +282,7 @@ void UMyOnlineGameInstance::JoinSessionByIndex(int32 SessionIndex)
 void UMyOnlineGameInstance::JoinSession(const FBlueprintSessionResult& SessionResult)
 {
     LastError = "";
-    
+  
     IOnlineSubsystem* OnlineSub = Online::GetSubsystem(GetWorld());
     if (!OnlineSub)
     {
@@ -268,7 +290,7 @@ void UMyOnlineGameInstance::JoinSession(const FBlueprintSessionResult& SessionRe
         OnJoinSessionFailed.Broadcast(LastError);
         return;
     }
-    
+  
     SessionInterface = OnlineSub->GetSessionInterface();
     if (!SessionInterface.IsValid())
     {
@@ -276,11 +298,11 @@ void UMyOnlineGameInstance::JoinSession(const FBlueprintSessionResult& SessionRe
         OnJoinSessionFailed.Broadcast(LastError);
         return;
     }
-    
+  
     // Bind delegate
     JoinSessionCompleteDelegate = FOnJoinSessionCompleteDelegate::CreateUObject(this, &UMyOnlineGameInstance::OnJoinSessionComplete);
     JoinSessionCompleteDelegateHandle = SessionInterface->AddOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegate);
-    
+  
     ULocalPlayer* LocalPlayer = GetFirstGamePlayer();
     if (!LocalPlayer)
     {
@@ -288,7 +310,7 @@ void UMyOnlineGameInstance::JoinSession(const FBlueprintSessionResult& SessionRe
         OnJoinSessionFailed.Broadcast(LastError);
         return;
     }
-    
+  
     UE_LOG(LogTemp, Log, TEXT("Joining session..."));
     if (!SessionInterface->JoinSession(*LocalPlayer->GetPreferredUniqueNetId(), NAME_GameSession, SessionResult.OnlineResult))
     {
@@ -304,11 +326,11 @@ void UMyOnlineGameInstance::OnJoinSessionComplete(FName SessionName, EOnJoinSess
     {
         SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegateHandle);
     }
-    
+  
     if (Result == EOnJoinSessionCompleteResult::Success)
     {
         UE_LOG(LogTemp, Log, TEXT("Successfully joined session!"));
-        
+      
         // Get connection string and travel to server
         FString ConnectString;
         if (SessionInterface->GetResolvedConnectString(SessionName, ConnectString))
@@ -340,7 +362,7 @@ void UMyOnlineGameInstance::OnJoinSessionComplete(FName SessionName, EOnJoinSess
                 LastError = "Failed to join session";
                 break;
         }
-        
+      
         UE_LOG(LogTemp, Error, TEXT("Join session failed: %s"), *LastError);
         OnJoinSessionFailed.Broadcast(LastError);
     }
@@ -377,7 +399,7 @@ void UMyOnlineGameInstance::TravelToServer(const FString& Address)
         PlayerController->SetInputMode(InputMode);
         PlayerController->SetShowMouseCursor(false);
         PlayerController->bShowMouseCursor = false;
-        
+      
         UE_LOG(LogTemp, Log, TEXT("Client traveling to: %s"), *Address);
         PlayerController->ClientTravel(Address, TRAVEL_Absolute);
     }
@@ -395,23 +417,23 @@ void UMyOnlineGameInstance::DestroySession()
     {
         return;
     }
-    
+  
     SessionInterface = OnlineSub->GetSessionInterface();
     if (!SessionInterface.IsValid())
     {
         return;
     }
-    
+  
     // Check if session exists
     if (!SessionInterface->GetNamedSession(NAME_GameSession))
     {
         OnSessionDestroyed.Broadcast();
         return;
     }
-    
+  
     DestroySessionCompleteDelegate = FOnDestroySessionCompleteDelegate::CreateUObject(this, &UMyOnlineGameInstance::OnDestroySessionComplete);
     DestroySessionCompleteDelegateHandle = SessionInterface->AddOnDestroySessionCompleteDelegate_Handle(DestroySessionCompleteDelegate);
-    
+  
     if (!SessionInterface->DestroySession(NAME_GameSession))
     {
         SessionInterface->ClearOnDestroySessionCompleteDelegate_Handle(DestroySessionCompleteDelegateHandle);
@@ -425,7 +447,7 @@ void UMyOnlineGameInstance::OnDestroySessionComplete(FName SessionName, bool bSu
     {
         SessionInterface->ClearOnDestroySessionCompleteDelegate_Handle(DestroySessionCompleteDelegateHandle);
     }
-    
+  
     if (bSuccess)
     {
         UE_LOG(LogTemp, Log, TEXT("Session destroyed"));
@@ -435,7 +457,7 @@ void UMyOnlineGameInstance::OnDestroySessionComplete(FName SessionName, bool bSu
     {
         UE_LOG(LogTemp, Warning, TEXT("Failed to destroy session"));
     }
-    
+  
     OnSessionDestroyed.Broadcast();
 }
 
@@ -446,7 +468,7 @@ void UMyOnlineGameInstance::LeaveGame()
     {
         DestroySession();
     }
-    
+  
     // Return to main menu
     UGameplayStatics::OpenLevel(this, FName("/Game/Remnantborn/Levels/MainMenu"), true);
 }
@@ -455,7 +477,7 @@ void UMyOnlineGameInstance::HandleNetworkFailure(UWorld* World, UNetDriver* NetD
 {
     UE_LOG(LogTemp, Error, TEXT("Network Failure: %s"), *ErrorString);
     LastError = ErrorString;
-    
+  
     // Return to main menu on network failure
     if (World && World->IsGameWorld())
     {
