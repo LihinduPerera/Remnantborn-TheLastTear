@@ -3,22 +3,20 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/TextBlock.h"
+#include "Blueprint/IUserObjectListEntry.h"
 #include "SessionInfoWidget.generated.h"
 
 class USessionInfoObject;
 
 UCLASS()
-class ELECTRICDREAMSSAMPLE_API USessionInfoWidget : public UUserWidget
+class ELECTRICDREAMSSAMPLE_API USessionInfoWidget : public UUserWidget, public IUserObjectListEntry
 {
 	GENERATED_BODY()
     
 public:
 	// Native construct
 	virtual void NativeConstruct() override;
-    
-	// Called when the list item is set
-	UFUNCTION(BlueprintCallable)
-	void SetItem(UObject* Item);
+	virtual void NativeOnListItemObjectSet(UObject* ListItemObject) override;
     
 	// Called to update the widget with data
 	UFUNCTION(BlueprintCallable)

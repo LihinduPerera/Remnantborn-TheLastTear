@@ -2,9 +2,9 @@
 
 USessionInfoObject::USessionInfoObject()
 {
-	SessionName = TEXT("");
-	PlayerCount = TEXT("");
-	Ping = TEXT("");
+	SessionName = TEXT("Loading...");
+	PlayerCount = TEXT("-");
+	Ping = TEXT("-");
 	SessionIndex = -1;
 }
 

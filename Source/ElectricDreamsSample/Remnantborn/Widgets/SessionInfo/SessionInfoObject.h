@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/NoExportTypes.h"
 #include "SessionInfoObject.generated.h"
 
 UCLASS(BlueprintType)
@@ -25,5 +26,6 @@ public:
 	USessionInfoObject();
     
 	// Setup function
+	UFUNCTION(BlueprintCallable)
 	void Setup(const FString& Name, const FString& Players, const FString& PingStr, int32 Index);
 };

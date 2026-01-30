@@ -213,21 +213,29 @@ void UMyOnlineGameInstance::OnFindSessionsComplete(bool bSuccess)
         {
             FSessionInfo SessionInfo;
           
-            // Extract session name - FIXED: Properly extract session settings
-            FString SessionName = TEXT("Unknown Session");
+            // Extract session name
+            FString SessionName = TEXT("LAN Session");
             
-            // First try to get the custom session name
-            if (SearchResult.Session.SessionSettings.Get(FName(TEXT("SESSION_NAME")), SessionName))
+            // Try to get the custom session name from settings
+            const FOnlineSessionSettings& Settings = SearchResult.Session.SessionSettings;
+            
+            // Check if SESSION_NAME exists in settings
+            const FOnlineSessionSetting* NameSetting = Settings.Settings.Find(FName(TEXT("SESSION_NAME")));
+            if (NameSetting)
             {
-                // Successfully got custom name
+                // Get the value from the setting
+                if (NameSetting->Data.GetType() == EOnlineKeyValuePairDataType::String)
+                {
+                    NameSetting->Data.GetValue(SessionName);
+                }
             }
             else
             {
                 // Fallback: Use the OwningUserName as session name
                 SessionName = SearchResult.Session.OwningUserName;
-                if (SessionName.IsEmpty())
+                if (SessionName.IsEmpty() || SessionName.Equals(TEXT("Unknown")))
                 {
-                    SessionName = FString::Printf(TEXT("Session_%d"), SessionSearchResults.Num() + 1);
+                    SessionName = FString::Printf(TEXT("LAN Session %d"), SessionSearchResults.Num() + 1);
                 }
             }
             
@@ -235,10 +243,9 @@ void UMyOnlineGameInstance::OnFindSessionsComplete(bool bSuccess)
           
             // Get player counts
             SessionInfo.MaxPlayers = SearchResult.Session.SessionSettings.NumPublicConnections;
-            SessionInfo.CurrentPlayers = SessionInfo.MaxPlayers - SearchResult.Session.NumOpenPublicConnections;
+            SessionInfo.CurrentPlayers = FMath::Max(0, SessionInfo.MaxPlayers - SearchResult.Session.NumOpenPublicConnections);
             
             // Ensure valid values
-            if (SessionInfo.CurrentPlayers < 0) SessionInfo.CurrentPlayers = 0;
             if (SessionInfo.MaxPlayers <= 0) SessionInfo.MaxPlayers = 4; // Default
             
             // Get ping - use actual ping value

@@ -6,26 +6,26 @@ void USessionInfoWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
     
-	// Initialize widget
+	// Don't initialize with default text - wait for data to be set
 	if (SessionNameText)
 	{
-		SessionNameText->SetText(FText::FromString(TEXT("Unknown Session")));
+		SessionNameText->SetText(FText::FromString(TEXT("Loading...")));
 	}
     
 	if (PlayerCountText)
 	{
-		PlayerCountText->SetText(FText::FromString(TEXT("0/0")));
+		PlayerCountText->SetText(FText::FromString(TEXT("-")));
 	}
     
 	if (PingText)
 	{
-		PingText->SetText(FText::FromString(TEXT("0 ms")));
+		PingText->SetText(FText::FromString(TEXT("-")));
 	}
 }
 
-void USessionInfoWidget::SetItem(UObject* Item)
+void USessionInfoWidget::NativeOnListItemObjectSet(UObject* ListItemObject)
 {
-	if (USessionInfoObject* SessionInfo = Cast<USessionInfoObject>(Item))
+	if (USessionInfoObject* SessionInfo = Cast<USessionInfoObject>(ListItemObject))
 	{
 		UpdateWidget(SessionInfo->SessionName, SessionInfo->PlayerCount, SessionInfo->Ping, SessionInfo->SessionIndex);
 	}

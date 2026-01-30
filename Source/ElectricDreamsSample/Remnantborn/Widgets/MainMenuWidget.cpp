@@ -303,14 +303,7 @@ void UMainMenuWidget::UpdateSessionList()
         return;
     }
 
-    // Clear old items
-    for (USessionInfoObject *Item : SessionListItems)
-    {
-        if (Item)
-        {
-            Item->ConditionalBeginDestroy();
-        }
-    }
+    // Clear old items - no need to destroy manually, ListView will handle it
     SessionListItems.Empty();
     SessionListView->ClearListItems();
 
@@ -320,7 +313,7 @@ void UMainMenuWidget::UpdateSessionList()
         const FSessionInfo &SessionInfo = GameInstance->SessionSearchResults[i];
 
         // Create new session info object
-        USessionInfoObject *ListItem = NewObject<USessionInfoObject>();
+        USessionInfoObject *ListItem = NewObject<USessionInfoObject>(this);
         if (ListItem)
         {
             // Ensure we have valid data
@@ -330,19 +323,29 @@ void UMainMenuWidget::UpdateSessionList()
                 SessionName = FString::Printf(TEXT("Session_%d"), i + 1);
             }
 
+            // Ensure valid player count
+            int32 CurrentPlayers = FMath::Max(0, SessionInfo.CurrentPlayers);
+            int32 MaxPlayers = FMath::Max(1, SessionInfo.MaxPlayers);
+            
+            // Ensure valid ping
+            int32 PingValue = FMath::Max(0, SessionInfo.Ping);
+
             ListItem->Setup(
                 SessionName,
-                FString::Printf(TEXT("%d/%d"), SessionInfo.CurrentPlayers, SessionInfo.MaxPlayers),
-                FString::Printf(TEXT("%d ms"), SessionInfo.Ping),
+                FString::Printf(TEXT("%d/%d"), CurrentPlayers, MaxPlayers),
+                FString::Printf(TEXT("%d ms"), PingValue),
                 i);
 
             SessionListItems.Add(ListItem);
             SessionListView->AddItem(ListItem);
 
             UE_LOG(LogTemp, Log, TEXT("Added session to list: %s, Players: %d/%d, Ping: %d"),
-                   *SessionName, SessionInfo.CurrentPlayers, SessionInfo.MaxPlayers, SessionInfo.Ping);
+                   *SessionName, CurrentPlayers, MaxPlayers, PingValue);
         }
     }
+
+    // Refresh the ListView to show new items
+    SessionListView->RequestRefresh();
 
     // Update status text with count
     if (SessionListItems.Num() > 0)
