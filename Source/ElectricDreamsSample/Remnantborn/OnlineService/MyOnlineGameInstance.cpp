@@ -6,26 +6,27 @@
 #include "GameFramework/PlayerController.h"
 #include "Engine/LocalPlayer.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h"
 
 UMyOnlineGameInstance::UMyOnlineGameInstance()
 {
     DefaultMapPath = TEXT("/Game/Remnantborn/Levels/TestGround");
     DefaultMaxPlayers = 4;
     bIsHosting = false;
-    bIsAuthenticated = false;
+    bIsLoggedIn = false;
 }
 
 void UMyOnlineGameInstance::Init()
 {
     Super::Init();
-  
+    
     // Initialize Online Subsystem
     IOnlineSubsystem* OnlineSub = Online::GetSubsystem(GetWorld());
     if (OnlineSub)
     {
         UE_LOG(LogTemp, Log, TEXT("Online Subsystem: %s"), *OnlineSub->GetSubsystemName().ToString());
     }
-  
+    
     // Bind to network events
     if (GEngine)
     {
@@ -33,26 +34,18 @@ void UMyOnlineGameInstance::Init()
         GEngine->OnTravelFailure().AddUObject(this, &UMyOnlineGameInstance::HandleTravelFailure);
     }
     
-    // Initialize HTTP Manager
-    HttpManager = NewObject<UHttpManager>(this);
-    if (HttpManager)
+    // Initialize HTTP Service
+    HttpService = NewObject<UEdsHttpService>(this);
+    if (HttpService)
     {
-        // Configure base URL (you might want to make this configurable)
-        HttpManager->Initialize(TEXT("http://localhost:3000/api"));
-        
-        // Bind HTTP Manager events
-        HttpManager->OnLoginComplete.AddDynamic(this, &UMyOnlineGameInstance::HandleLoginComplete);
-        HttpManager->OnSignupComplete.AddDynamic(this, &UMyOnlineGameInstance::HandleSignupComplete);
-        HttpManager->OnTokenVerified.AddDynamic(this, &UMyOnlineGameInstance::HandleTokenVerified);
-        HttpManager->OnProfileLoaded.AddDynamic(this, &UMyOnlineGameInstance::HandleProfileLoaded);
-        HttpManager->OnApiError.AddDynamic(this, &UMyOnlineGameInstance::HandleApiError);
+        HttpService->Initialize(TEXT("http://localhost:3000/api"));
         
         // Try to load saved authentication
         LoadSavedAuth();
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to create HTTP Manager"));
+        UE_LOG(LogTemp, Error, TEXT("Failed to create HTTP Service"));
     }
 }
 
@@ -63,26 +56,25 @@ void UMyOnlineGameInstance::Shutdown()
         GEngine->OnNetworkFailure().RemoveAll(this);
         GEngine->OnTravelFailure().RemoveAll(this);
     }
-  
+    
     DestroySession();
     
-    // Clean up HTTP Manager
-    if (HttpManager)
+    // Clean up HTTP Service
+    if (HttpService)
     {
-        HttpManager->ConditionalBeginDestroy();
-        HttpManager = nullptr;
+        HttpService->ConditionalBeginDestroy();
+        HttpService = nullptr;
     }
-  
+    
     Super::Shutdown();
 }
-
 
 void UMyOnlineGameInstance::CreateSession(FString SessionName, int32 MaxPlayers)
 {
     PendingSessionName = SessionName;
     PendingMaxPlayers = MaxPlayers;
     LastError = "";
-  
+    
     IOnlineSubsystem* OnlineSub = Online::GetSubsystem(GetWorld());
     if (!OnlineSub)
     {
@@ -90,7 +82,7 @@ void UMyOnlineGameInstance::CreateSession(FString SessionName, int32 MaxPlayers)
         OnCreateSessionFailed.Broadcast(LastError);
         return;
     }
-  
+    
     SessionInterface = OnlineSub->GetSessionInterface();
     if (!SessionInterface.IsValid())
     {
@@ -98,33 +90,33 @@ void UMyOnlineGameInstance::CreateSession(FString SessionName, int32 MaxPlayers)
         OnCreateSessionFailed.Broadcast(LastError);
         return;
     }
-  
+    
     // Destroy existing session if any
     if (SessionInterface->GetNamedSession(NAME_GameSession))
     {
         UE_LOG(LogTemp, Warning, TEXT("Destroying existing session before creating new one"));
         DestroySession();
     }
-  
+    
     // Setup LAN session settings
     FOnlineSessionSettings SessionSettings;
-    SessionSettings.bIsLANMatch = true; // CRITICAL for LAN
-    SessionSettings.bIsDedicated = false; // Listen server
-    SessionSettings.bUsesPresence = true; // Needed for LAN discovery
-    SessionSettings.bShouldAdvertise = true; // Make it visible
-    SessionSettings.bAllowJoinInProgress = true; // Allow late joins
+    SessionSettings.bIsLANMatch = true;
+    SessionSettings.bIsDedicated = false;
+    SessionSettings.bUsesPresence = true;
+    SessionSettings.bShouldAdvertise = true;
+    SessionSettings.bAllowJoinInProgress = true;
     SessionSettings.bAllowInvites = true;
     SessionSettings.NumPublicConnections = MaxPlayers;
     SessionSettings.NumPrivateConnections = 0;
-  
-    // Set custom parameters - FIXED: Using proper FVariantData type
+    
+    // Set custom parameters
     SessionSettings.Set(FName(TEXT("SESSION_NAME")), FOnlineSessionSetting(SessionName, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing));
     SessionSettings.Set(FName(TEXT("GAME_VERSION")), FOnlineSessionSetting(FString("1.0"), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing));
-  
+    
     // Bind delegate
     CreateSessionCompleteDelegate = FOnCreateSessionCompleteDelegate::CreateUObject(this, &UMyOnlineGameInstance::OnCreateSessionComplete);
     CreateSessionCompleteDelegateHandle = SessionInterface->AddOnCreateSessionCompleteDelegate_Handle(CreateSessionCompleteDelegate);
-  
+    
     // Create session with first local player
     ULocalPlayer* LocalPlayer = GetFirstGamePlayer();
     if (!LocalPlayer)
@@ -134,7 +126,7 @@ void UMyOnlineGameInstance::CreateSession(FString SessionName, int32 MaxPlayers)
         OnCreateSessionFailed.Broadcast(LastError);
         return;
     }
-  
+    
     if (!SessionInterface->CreateSession(*LocalPlayer->GetPreferredUniqueNetId(), NAME_GameSession, SessionSettings))
     {
         LastError = "Failed to create session";
@@ -153,20 +145,20 @@ void UMyOnlineGameInstance::OnCreateSessionComplete(FName SessionName, bool bSuc
     {
         SessionInterface->ClearOnCreateSessionCompleteDelegate_Handle(CreateSessionCompleteDelegateHandle);
     }
-  
+    
     if (bSuccess)
     {
         UE_LOG(LogTemp, Log, TEXT("Session created successfully: %s"), *SessionName.ToString());
         bIsHosting = true;
         OnCreateSessionSuccess.Broadcast();
-      
+        
         // Travel to the game map as listen server
         if (!DefaultMapPath.IsEmpty())
         {
             FString TravelPath = DefaultMapPath;
             TravelPath.RemoveFromStart(GetWorld()->StreamingLevelsPrefix);
             TravelPath += TEXT("?listen");
-          
+            
             UE_LOG(LogTemp, Log, TEXT("Server traveling to: %s"), *TravelPath);
             GetWorld()->ServerTravel(TravelPath);
         }
@@ -183,7 +175,7 @@ void UMyOnlineGameInstance::FindSessions()
 {
     LastError = "";
     SessionSearchResults.Empty();
-  
+    
     IOnlineSubsystem* OnlineSub = Online::GetSubsystem(GetWorld());
     if (!OnlineSub)
     {
@@ -191,7 +183,7 @@ void UMyOnlineGameInstance::FindSessions()
         OnSessionSearchCompleted.Broadcast(false);
         return;
     }
-  
+    
     SessionInterface = OnlineSub->GetSessionInterface();
     if (!SessionInterface.IsValid())
     {
@@ -199,17 +191,17 @@ void UMyOnlineGameInstance::FindSessions()
         OnSessionSearchCompleted.Broadcast(false);
         return;
     }
-  
+    
     // Setup search for LAN games
     SessionSearch = MakeShareable(new FOnlineSessionSearch());
-    SessionSearch->bIsLanQuery = true; // CRITICAL for LAN
+    SessionSearch->bIsLanQuery = true;
     SessionSearch->MaxSearchResults = 20;
     SessionSearch->TimeoutInSeconds = 5;
-  
+    
     // Bind delegate
     FindSessionsCompleteDelegate = FOnFindSessionsCompleteDelegate::CreateUObject(this, &UMyOnlineGameInstance::OnFindSessionsComplete);
     FindSessionsCompleteDelegateHandle = SessionInterface->AddOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegate);
-  
+    
     ULocalPlayer* LocalPlayer = GetFirstGamePlayer();
     if (!LocalPlayer)
     {
@@ -217,7 +209,7 @@ void UMyOnlineGameInstance::FindSessions()
         OnSessionSearchCompleted.Broadcast(false);
         return;
     }
-  
+    
     UE_LOG(LogTemp, Log, TEXT("Starting LAN session search..."));
     if (!SessionInterface->FindSessions(*LocalPlayer->GetPreferredUniqueNetId(), SessionSearch.ToSharedRef()))
     {
@@ -233,18 +225,18 @@ void UMyOnlineGameInstance::OnFindSessionsComplete(bool bSuccess)
     {
         SessionInterface->ClearOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegateHandle);
     }
-  
+    
     if (bSuccess && SessionSearch.IsValid())
     {
         UE_LOG(LogTemp, Log, TEXT("Found %d sessions"), SessionSearch->SearchResults.Num());
-      
+        
         // Clear previous results
         SessionSearchResults.Empty();
         
         for (const FOnlineSessionSearchResult& SearchResult : SessionSearch->SearchResults)
         {
             FSessionInfo SessionInfo;
-          
+            
             // Extract session name
             FString SessionName = TEXT("LAN Session");
             
@@ -272,7 +264,7 @@ void UMyOnlineGameInstance::OnFindSessionsComplete(bool bSuccess)
             }
             
             SessionInfo.SessionName = SessionName;
-          
+            
             // Get player counts
             SessionInfo.MaxPlayers = SearchResult.Session.SessionSettings.NumPublicConnections;
             SessionInfo.CurrentPlayers = FMath::Max(0, SessionInfo.MaxPlayers - SearchResult.Session.NumOpenPublicConnections);
@@ -285,7 +277,7 @@ void UMyOnlineGameInstance::OnFindSessionsComplete(bool bSuccess)
             
             // Store the session result
             SessionInfo.SessionResult.OnlineResult = SearchResult;
-          
+            
             SessionSearchResults.Add(SessionInfo);
             UE_LOG(LogTemp, Log, TEXT("Found session: %s (%d/%d players, %d ms ping)"),
                 *SessionInfo.SessionName,
@@ -293,7 +285,7 @@ void UMyOnlineGameInstance::OnFindSessionsComplete(bool bSuccess)
                 SessionInfo.MaxPlayers,
                 SessionInfo.Ping);
         }
-      
+        
         OnSessionSearchCompleted.Broadcast(true);
     }
     else
@@ -309,7 +301,7 @@ void UMyOnlineGameInstance::JoinSessionByIndex(int32 SessionIndex)
 {
     if (SessionSearchResults.IsValidIndex(SessionIndex))
     {
-        JoinSession(SessionSearchResults[SessionIndex].SessionResult);
+        JoinSessionByResult(SessionSearchResults[SessionIndex].SessionResult);
     }
     else
     {
@@ -318,10 +310,10 @@ void UMyOnlineGameInstance::JoinSessionByIndex(int32 SessionIndex)
     }
 }
 
-void UMyOnlineGameInstance::JoinSession(const FBlueprintSessionResult& SessionResult)
+void UMyOnlineGameInstance::JoinSessionByResult(const FBlueprintSessionResult& SessionResult)
 {
     LastError = "";
-  
+    
     IOnlineSubsystem* OnlineSub = Online::GetSubsystem(GetWorld());
     if (!OnlineSub)
     {
@@ -329,7 +321,7 @@ void UMyOnlineGameInstance::JoinSession(const FBlueprintSessionResult& SessionRe
         OnJoinSessionFailed.Broadcast(LastError);
         return;
     }
-  
+    
     SessionInterface = OnlineSub->GetSessionInterface();
     if (!SessionInterface.IsValid())
     {
@@ -337,11 +329,11 @@ void UMyOnlineGameInstance::JoinSession(const FBlueprintSessionResult& SessionRe
         OnJoinSessionFailed.Broadcast(LastError);
         return;
     }
-  
+    
     // Bind delegate
     JoinSessionCompleteDelegate = FOnJoinSessionCompleteDelegate::CreateUObject(this, &UMyOnlineGameInstance::OnJoinSessionComplete);
     JoinSessionCompleteDelegateHandle = SessionInterface->AddOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegate);
-  
+    
     ULocalPlayer* LocalPlayer = GetFirstGamePlayer();
     if (!LocalPlayer)
     {
@@ -349,7 +341,7 @@ void UMyOnlineGameInstance::JoinSession(const FBlueprintSessionResult& SessionRe
         OnJoinSessionFailed.Broadcast(LastError);
         return;
     }
-  
+    
     UE_LOG(LogTemp, Log, TEXT("Joining session..."));
     if (!SessionInterface->JoinSession(*LocalPlayer->GetPreferredUniqueNetId(), NAME_GameSession, SessionResult.OnlineResult))
     {
@@ -365,11 +357,11 @@ void UMyOnlineGameInstance::OnJoinSessionComplete(FName SessionName, EOnJoinSess
     {
         SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegateHandle);
     }
-  
+    
     if (Result == EOnJoinSessionCompleteResult::Success)
     {
         UE_LOG(LogTemp, Log, TEXT("Successfully joined session!"));
-      
+        
         // Get connection string and travel to server
         FString ConnectString;
         if (SessionInterface->GetResolvedConnectString(SessionName, ConnectString))
@@ -401,7 +393,7 @@ void UMyOnlineGameInstance::OnJoinSessionComplete(FName SessionName, EOnJoinSess
                 LastError = "Failed to join session";
                 break;
         }
-      
+        
         UE_LOG(LogTemp, Error, TEXT("Join session failed: %s"), *LastError);
         OnJoinSessionFailed.Broadcast(LastError);
     }
@@ -438,7 +430,7 @@ void UMyOnlineGameInstance::TravelToServer(const FString& Address)
         PlayerController->SetInputMode(InputMode);
         PlayerController->SetShowMouseCursor(false);
         PlayerController->bShowMouseCursor = false;
-      
+        
         UE_LOG(LogTemp, Log, TEXT("Client traveling to: %s"), *Address);
         PlayerController->ClientTravel(Address, TRAVEL_Absolute);
     }
@@ -456,23 +448,23 @@ void UMyOnlineGameInstance::DestroySession()
     {
         return;
     }
-  
+    
     SessionInterface = OnlineSub->GetSessionInterface();
     if (!SessionInterface.IsValid())
     {
         return;
     }
-  
+    
     // Check if session exists
     if (!SessionInterface->GetNamedSession(NAME_GameSession))
     {
         OnSessionDestroyed.Broadcast();
         return;
     }
-  
+    
     DestroySessionCompleteDelegate = FOnDestroySessionCompleteDelegate::CreateUObject(this, &UMyOnlineGameInstance::OnDestroySessionComplete);
     DestroySessionCompleteDelegateHandle = SessionInterface->AddOnDestroySessionCompleteDelegate_Handle(DestroySessionCompleteDelegate);
-  
+    
     if (!SessionInterface->DestroySession(NAME_GameSession))
     {
         SessionInterface->ClearOnDestroySessionCompleteDelegate_Handle(DestroySessionCompleteDelegateHandle);
@@ -486,7 +478,7 @@ void UMyOnlineGameInstance::OnDestroySessionComplete(FName SessionName, bool bSu
     {
         SessionInterface->ClearOnDestroySessionCompleteDelegate_Handle(DestroySessionCompleteDelegateHandle);
     }
-  
+    
     if (bSuccess)
     {
         UE_LOG(LogTemp, Log, TEXT("Session destroyed"));
@@ -496,7 +488,7 @@ void UMyOnlineGameInstance::OnDestroySessionComplete(FName SessionName, bool bSu
     {
         UE_LOG(LogTemp, Warning, TEXT("Failed to destroy session"));
     }
-  
+    
     OnSessionDestroyed.Broadcast();
 }
 
@@ -507,7 +499,7 @@ void UMyOnlineGameInstance::LeaveGame()
     {
         DestroySession();
     }
-  
+    
     // Return to main menu
     UGameplayStatics::OpenLevel(this, FName("/Game/Remnantborn/Levels/MainMenu"), true);
 }
@@ -516,7 +508,7 @@ void UMyOnlineGameInstance::HandleNetworkFailure(UWorld* World, UNetDriver* NetD
 {
     UE_LOG(LogTemp, Error, TEXT("Network Failure: %s"), *ErrorString);
     LastError = ErrorString;
-  
+    
     // Return to main menu on network failure
     if (World && World->IsGameWorld())
     {
@@ -531,260 +523,278 @@ void UMyOnlineGameInstance::HandleTravelFailure(UWorld* World, ETravelFailure::T
     OnJoinSessionFailed.Broadcast(ErrorString);
 }
 
-// === Authentication Methods ===
+// === Authentication Methods (Updated with lambda callbacks) ===
 
 void UMyOnlineGameInstance::Login(const FString& Email, const FString& Password)
 {
-    if (HttpManager)
+    if (!HttpService)
     {
-        HttpManager->Login(Email, Password);
+        UE_LOG(LogTemp, Error, TEXT("HTTP Service not initialized"));
+        return;
     }
-    else
+    
+    HttpService->Login(Email, Password, FOnAuthResponse::CreateLambda([this](const FAuthResponse& Response)
     {
-        FAuthResponse AuthResponse;
-        AuthResponse.bSuccess = false;
-        AuthResponse.ErrorMessage = TEXT("HTTP Manager not initialized");
-        OnAuthLoginComplete.Broadcast(AuthResponse);
-    }
+        if (Response.bSuccess && !Response.Token.IsEmpty())
+        {
+            // Save token and update state
+            SetAuthState(true, Response.Token, Response.UserProfile.UserId, Response.UserProfile);
+            
+            // Save to local storage
+            if (HttpService)
+            {
+                HttpService->SaveAuth(Response.Token, Response.UserProfile.UserId);
+            }
+            
+            UE_LOG(LogTemp, Log, TEXT("Login successful for user: %s"), *Response.UserProfile.Username);
+            
+            // Get full profile
+            GetUserProfile();
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Login failed: %s"), *Response.ErrorMessage);
+            // Still broadcast state change (to false)
+            OnAuthStateChanged.Broadcast(false);
+        }
+    }));
 }
 
 void UMyOnlineGameInstance::Signup(const FString& Email, const FString& Password, const FString& Username)
 {
-    if (HttpManager)
+    if (!HttpService)
     {
-        HttpManager->Signup(Email, Password, Username);
+        UE_LOG(LogTemp, Error, TEXT("HTTP Service not initialized"));
+        return;
     }
-    else
+    
+    HttpService->Signup(Email, Password, Username, FOnAuthResponse::CreateLambda([this](const FAuthResponse& Response)
     {
-        FAuthResponse AuthResponse;
-        AuthResponse.bSuccess = false;
-        AuthResponse.ErrorMessage = TEXT("HTTP Manager not initialized");
-        OnAuthSignupComplete.Broadcast(AuthResponse);
-    }
+        if (Response.bSuccess && !Response.Token.IsEmpty())
+        {
+            // Save token and update state
+            SetAuthState(true, Response.Token, Response.UserProfile.UserId, Response.UserProfile);
+            
+            // Save to local storage
+            if (HttpService)
+            {
+                HttpService->SaveAuth(Response.Token, Response.UserProfile.UserId);
+            }
+            
+            UE_LOG(LogTemp, Log, TEXT("Signup successful for user: %s"), *Response.UserProfile.Username);
+            
+            // Get full profile
+            GetUserProfile();
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Signup failed: %s"), *Response.ErrorMessage);
+            OnAuthStateChanged.Broadcast(false);
+        }
+    }));
 }
 
 void UMyOnlineGameInstance::DevLogin(const FString& Email)
 {
-    if (HttpManager)
+    if (!HttpService)
     {
-        HttpManager->DevLogin(Email);
+        UE_LOG(LogTemp, Error, TEXT("HTTP Service not initialized"));
+        return;
     }
-    else
+    
+    HttpService->DevLogin(Email, FOnAuthResponse::CreateLambda([this](const FAuthResponse& Response)
     {
-        FAuthResponse AuthResponse;
-        AuthResponse.bSuccess = false;
-        AuthResponse.ErrorMessage = TEXT("HTTP Manager not initialized");
-        OnAuthLoginComplete.Broadcast(AuthResponse);
-    }
+        if (Response.bSuccess && !Response.Token.IsEmpty())
+        {
+            // Save token and update state
+            SetAuthState(true, Response.Token, Response.UserProfile.UserId, Response.UserProfile);
+            
+            // Save to local storage
+            if (HttpService)
+            {
+                HttpService->SaveAuth(Response.Token, Response.UserProfile.UserId);
+            }
+            
+            UE_LOG(LogTemp, Log, TEXT("Dev login successful for user: %s"), *Response.UserProfile.Username);
+            
+            // Get full profile
+            GetUserProfile();
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Dev login failed: %s"), *Response.ErrorMessage);
+            OnAuthStateChanged.Broadcast(false);
+        }
+    }));
 }
 
 void UMyOnlineGameInstance::Logout()
 {
-    if (HttpManager)
+    bIsLoggedIn = false;
+    AuthToken.Empty();
+    CurrentUserId.Empty();
+    CurrentUserProfile = FUserProfile();
+    
+    // Clear saved auth
+    if (HttpService)
     {
-        HttpManager->Logout();
-        bIsAuthenticated = false;
-        CurrentUserProfile = FUserProfile();
+        HttpService->ClearAuth();
     }
+    
+    // Broadcast state change
+    OnAuthStateChanged.Broadcast(false);
+    OnProfileUpdated.Broadcast(FUserProfile());
+    
+    UE_LOG(LogTemp, Log, TEXT("User logged out"));
 }
 
 void UMyOnlineGameInstance::LoadSavedAuth()
 {
-    if (HttpManager)
+    if (!HttpService)
     {
-        if (HttpManager->LoadSavedAuth())
+        return;
+    }
+    
+    FString SavedToken, SavedUserId;
+    if (HttpService->LoadSavedAuth(SavedToken, SavedUserId))
+    {
+        UE_LOG(LogTemp, Log, TEXT("Found saved auth: UserId=%s"), *SavedUserId);
+        
+        // Store temporarily
+        AuthToken = SavedToken;
+        CurrentUserId = SavedUserId;
+        
+        // Verify the token
+        HttpService->VerifyToken(SavedToken, FOnAuthResponse::CreateLambda([this, SavedToken, SavedUserId](const FAuthResponse& Response)
         {
-            UE_LOG(LogTemp, Log, TEXT("Attempting to load saved authentication..."));
-        }
+            if (Response.bSuccess)
+            {
+                // Token is valid, set auth state
+                SetAuthState(true, SavedToken, SavedUserId, Response.UserProfile);
+                
+                // Get full profile
+                GetUserProfile();
+                
+                UE_LOG(LogTemp, Log, TEXT("Token verified for user: %s"), *Response.UserProfile.Username);
+            }
+            else
+            {
+                // Token invalid, clear saved auth
+                AuthToken.Empty();
+                CurrentUserId.Empty();
+                
+                if (HttpService)
+                {
+                    HttpService->ClearAuth();
+                }
+                
+                UE_LOG(LogTemp, Warning, TEXT("Saved token verification failed: %s"), *Response.ErrorMessage);
+                OnAuthStateChanged.Broadcast(false);
+            }
+        }));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("No saved auth found"));
+        OnAuthStateChanged.Broadcast(false);
     }
 }
 
 void UMyOnlineGameInstance::GetUserProfile()
 {
-    if (HttpManager && bIsAuthenticated && !CurrentUserProfile.UserId.IsEmpty())
+    if (!HttpService || !bIsLoggedIn || CurrentUserId.IsEmpty() || AuthToken.IsEmpty())
     {
-        HttpManager->GetProfile(CurrentUserProfile.UserId);
+        UE_LOG(LogTemp, Warning, TEXT("Cannot get profile: Not logged in"));
+        return;
     }
+    
+    HttpService->GetProfile(CurrentUserId, AuthToken, FOnProfileResponse::CreateLambda([this](const FUserProfile& Profile)
+    {
+        if (Profile.bIsValid)
+        {
+            CurrentUserProfile = Profile;
+            
+            // Broadcast profile update
+            OnProfileUpdated.Broadcast(Profile);
+            
+            UE_LOG(LogTemp, Log, TEXT("Profile loaded: %s (Level: %d, Remnants: %d)"),
+                   *Profile.Username, Profile.Level, Profile.RemnantCount);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Failed to load profile"));
+        }
+    }));
 }
 
 void UMyOnlineGameInstance::UpdateProfile(const FString& Username, const FString& Bio)
 {
-    if (HttpManager && bIsAuthenticated && !CurrentUserProfile.UserId.IsEmpty())
+    if (!HttpService || !bIsLoggedIn || CurrentUserId.IsEmpty() || AuthToken.IsEmpty())
     {
-        HttpManager->UpdateProfile(CurrentUserProfile.UserId, Username, Bio);
+        UE_LOG(LogTemp, Warning, TEXT("Cannot update profile: Not logged in"));
+        return;
     }
+    
+    HttpService->UpdateProfile(CurrentUserId, AuthToken, Username, Bio, FOnSimpleResponse::CreateLambda([this](bool bSuccess)
+    {
+        if (bSuccess)
+        {
+            UE_LOG(LogTemp, Log, TEXT("Profile updated successfully"));
+            // Refresh profile
+            GetUserProfile();
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Failed to update profile"));
+        }
+    }));
 }
 
 void UMyOnlineGameInstance::UpdateGameStats(int32 Level, int32 RemnantCount, const FString& Operation)
 {
-    if (HttpManager && bIsAuthenticated && !CurrentUserProfile.UserId.IsEmpty())
+    if (!HttpService || !bIsLoggedIn || CurrentUserId.IsEmpty() || AuthToken.IsEmpty())
     {
-        HttpManager->UpdateGameStats(CurrentUserProfile.UserId, Level, RemnantCount, Operation);
+        UE_LOG(LogTemp, Warning, TEXT("Cannot update game stats: Not logged in"));
+        return;
     }
-}
-
-bool UMyOnlineGameInstance::IsLoggedIn() const
-{
-    return bIsAuthenticated;
-}
-
-FUserProfile UMyOnlineGameInstance::GetCurrentUserProfile() const
-{
-    return CurrentUserProfile;
-}
-
-FString UMyOnlineGameInstance::GetAuthToken() const
-{
-    if (HttpManager)
-    {
-        return HttpManager->GetAuthToken();
-    }
-    return FString();
-}
-
-// === Event Handlers ===
-
-void UMyOnlineGameInstance::HandleLoginComplete(const FAuthResponse& AuthResponse)
-{
-    UE_LOG(LogTemp, Log, TEXT("GameInstance: HandleLoginComplete - Success: %s, Token: %s, Error: %s"),
-        AuthResponse.bSuccess ? TEXT("true") : TEXT("false"),
-        *AuthResponse.Token,
-        *AuthResponse.ErrorMessage);
     
-    if (AuthResponse.bSuccess && !AuthResponse.Token.IsEmpty())
-    {
-        bIsAuthenticated = true;
-        CurrentUserProfile = AuthResponse.UserProfile;
-        
-        UE_LOG(LogTemp, Log, TEXT("Login successful for user: %s, Level: %d"), 
-            *CurrentUserProfile.Username, CurrentUserProfile.Level);
-        
-        // FIX: Broadcast to UI first
-        if (OnAuthLoginComplete.IsBound())
+    HttpService->UpdateGameStats(CurrentUserId, AuthToken, Level, RemnantCount, Operation, 
+        FOnSimpleResponse::CreateLambda([this](bool bSuccess)
         {
-            OnAuthLoginComplete.Broadcast(AuthResponse);
-        }
-        
-        // Then update profile
-        OnProfileUpdated.Broadcast(CurrentUserProfile);
-        
-        // Get full profile details asynchronously to refresh if needed
-        if (!CurrentUserProfile.UserId.IsEmpty())
-        {
-            GetUserProfile();
-        }
-    }
-    else
-    {
-        bIsAuthenticated = false;
-        UE_LOG(LogTemp, Warning, TEXT("Login failed: %s"), *AuthResponse.ErrorMessage);
-        
-        // Still broadcast the response so UI can handle the error
-        if (OnAuthLoginComplete.IsBound())
-        {
-            OnAuthLoginComplete.Broadcast(AuthResponse);
-        }
-    }
+            if (bSuccess)
+            {
+                UE_LOG(LogTemp, Log, TEXT("Game stats updated successfully"));
+                // Refresh profile
+                GetUserProfile();
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Failed to update game stats"));
+            }
+        }));
 }
 
-void UMyOnlineGameInstance::HandleSignupComplete(const FAuthResponse& AuthResponse)
+void UMyOnlineGameInstance::SetAuthState(bool bLoggedIn, const FString& Token, const FString& UserId, const FUserProfile& Profile)
 {
-    UE_LOG(LogTemp, Log, TEXT("GameInstance: HandleSignupComplete - Success: %s, Error: %s"),
-        AuthResponse.bSuccess ? TEXT("true") : TEXT("false"),
-        *AuthResponse.ErrorMessage);
+    bIsLoggedIn = bLoggedIn;
     
-    if (AuthResponse.bSuccess && !AuthResponse.Token.IsEmpty())
+    if (bLoggedIn)
     {
-        bIsAuthenticated = true;
-        CurrentUserProfile = AuthResponse.UserProfile;
+        AuthToken = Token;
+        CurrentUserId = UserId;
+        CurrentUserProfile = Profile;
         
-        UE_LOG(LogTemp, Log, TEXT("Signup successful for user: %s"), *CurrentUserProfile.Username);
-        
-        // FIX: Broadcast to UI first
-        if (OnAuthSignupComplete.IsBound())
-        {
-            OnAuthSignupComplete.Broadcast(AuthResponse);
-        }
-        
-        // Then update profile
-        OnProfileUpdated.Broadcast(CurrentUserProfile);
-        
-        // Get full profile details
-        if (!CurrentUserProfile.UserId.IsEmpty())
-        {
-            GetUserProfile();
-        }
+        // Broadcast both events
+        OnAuthStateChanged.Broadcast(true);
+        OnProfileUpdated.Broadcast(Profile);
     }
     else
     {
-        bIsAuthenticated = false;
-        UE_LOG(LogTemp, Warning, TEXT("Signup failed: %s"), *AuthResponse.ErrorMessage);
-        
-        if (OnAuthSignupComplete.IsBound())
-        {
-            OnAuthSignupComplete.Broadcast(AuthResponse);
-        }
-    }
-}
-
-void UMyOnlineGameInstance::HandleTokenVerified(const FAuthResponse& AuthResponse)
-{
-    if (AuthResponse.bSuccess)
-    {
-        bIsAuthenticated = true;
-        CurrentUserProfile = AuthResponse.UserProfile;
-        
-        UE_LOG(LogTemp, Log, TEXT("Token verified for user: %s"), *CurrentUserProfile.Username);
-        
-        // Update UI
-        OnProfileUpdated.Broadcast(CurrentUserProfile);
-        
-        // Get full profile
-        GetUserProfile();
-    }
-    else
-    {
-        bIsAuthenticated = false;
+        AuthToken.Empty();
+        CurrentUserId.Empty();
         CurrentUserProfile = FUserProfile();
         
-        // Clear invalid saved auth
-        if (HttpManager)
-        {
-            FString Token = HttpManager->GetAuthToken();
-            if (!Token.IsEmpty())
-            {
-                UE_LOG(LogTemp, Warning, TEXT("Clearing invalid token"));
-                HttpManager->Logout();
-            }
-        }
-        
-        UE_LOG(LogTemp, Warning, TEXT("Token verification failed: %s"), *AuthResponse.ErrorMessage);
+        OnAuthStateChanged.Broadcast(false);
+        OnProfileUpdated.Broadcast(FUserProfile());
     }
-}
-
-void UMyOnlineGameInstance::HandleProfileLoaded(const FUserProfile& UserProfile)
-{
-    // Update current profile
-    CurrentUserProfile = UserProfile;
-    
-    // Make sure we're authenticated if we have a valid profile
-    if (!CurrentUserProfile.UserId.IsEmpty())
-    {
-        bIsAuthenticated = true;
-    }
-    
-    // Broadcast update
-    if (OnProfileUpdated.IsBound())
-    {
-        OnProfileUpdated.Broadcast(UserProfile);
-    }
-    
-    UE_LOG(LogTemp, Log, TEXT("Profile loaded: %s (Level: %d, Remnants: %d)"),
-           *UserProfile.Username, UserProfile.Level, UserProfile.RemnantCount);
-}
-
-void UMyOnlineGameInstance::HandleApiError(const FString& ErrorMessage)
-{
-    UE_LOG(LogTemp, Error, TEXT("API Error: %s"), *ErrorMessage);
-    LastError = ErrorMessage;
 }

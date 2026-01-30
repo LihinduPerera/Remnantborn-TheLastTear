@@ -5,7 +5,7 @@
 #include "Interfaces/OnlineSessionInterface.h"
 #include "OnlineSessionSettings.h"
 #include "FindSessionsCallbackProxy.h"
-#include "HttpManager/HttpManager.h"  // Added
+#include "UEdsHttpService.h"
 #include "MyOnlineGameInstance.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSessionSearchCompleted, bool, bSuccess);
@@ -13,9 +13,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnCreateSessionSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCreateSessionFailed, const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnJoinSessionFailed, const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSessionDestroyed);
-// Added authentication delegates
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAuthLoginComplete, const FAuthResponse&, AuthResponse);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAuthSignupComplete, const FAuthResponse&, AuthResponse);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAuthStateChanged, bool, bIsLoggedIn);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnProfileUpdated, const FUserProfile&, UserProfile);
 
 USTRUCT(BlueprintType)
@@ -58,7 +56,7 @@ public:
     void JoinSessionByIndex(int32 SessionIndex);
     
     UFUNCTION(BlueprintCallable, Category = "Multiplayer")
-    void JoinSession(const FBlueprintSessionResult& SessionResult);
+    void JoinSessionByResult(const FBlueprintSessionResult& SessionResult);
     
     UFUNCTION(BlueprintCallable, Category = "Multiplayer")
     void DestroySession();
@@ -102,13 +100,13 @@ public:
     
     // === Getters ===
     UFUNCTION(BlueprintPure, Category = "Authentication")
-    bool IsLoggedIn() const;
+    bool IsLoggedIn() const { return bIsLoggedIn; }
     
     UFUNCTION(BlueprintPure, Category = "Authentication")
-    FUserProfile GetCurrentUserProfile() const;
+    FUserProfile GetCurrentUserProfile() const { return CurrentUserProfile; }
     
     UFUNCTION(BlueprintPure, Category = "Authentication")
-    FString GetAuthToken() const;
+    FString GetAuthToken() const { return AuthToken; }
     
     // === Multiplayer Events ===
     UPROPERTY(BlueprintAssignable, Category = "Multiplayer|Events")
@@ -128,10 +126,7 @@ public:
     
     // === Authentication Events ===
     UPROPERTY(BlueprintAssignable, Category = "Authentication|Events")
-    FOnAuthLoginComplete OnAuthLoginComplete;
-
-    UPROPERTY(BlueprintAssignable, Category = "Authentication|Events")
-    FOnAuthSignupComplete OnAuthSignupComplete;
+    FOnAuthStateChanged OnAuthStateChanged;
     
     UPROPERTY(BlueprintAssignable, Category = "Profile|Events")
     FOnProfileUpdated OnProfileUpdated;
@@ -189,16 +184,14 @@ private:
     
     // === Authentication ===
     UPROPERTY()
-    UHttpManager* HttpManager;
-    
-    // Auth event handlers
-    void HandleLoginComplete(const FAuthResponse& AuthResponse);
-    void HandleSignupComplete(const FAuthResponse& AuthResponse);
-    void HandleTokenVerified(const FAuthResponse& AuthResponse);
-    void HandleProfileLoaded(const FUserProfile& UserProfile);
-    void HandleApiError(const FString& ErrorMessage);
+    UEdsHttpService* HttpService;
     
     // Current user data
     FUserProfile CurrentUserProfile;
-    bool bIsAuthenticated = false;
+    FString AuthToken;
+    FString CurrentUserId;
+    bool bIsLoggedIn = false;
+    
+    // Helper methods
+    void SetAuthState(bool bLoggedIn, const FString& Token = FString(), const FString& UserId = FString(), const FUserProfile& Profile = FUserProfile());
 };

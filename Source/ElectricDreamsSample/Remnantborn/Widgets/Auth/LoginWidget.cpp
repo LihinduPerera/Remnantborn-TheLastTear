@@ -30,11 +30,11 @@ void ULoginWidget::NativeConstruct()
         CloseButton->OnClicked.AddDynamic(this, &ULoginWidget::OnCloseClicked);
     }
     
-    // Bind to GameInstance events
+    // Bind to GameInstance auth state changes
     UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
     if (GameInstance)
     {
-        GameInstance->OnAuthLoginComplete.AddDynamic(this, &ULoginWidget::HandleLoginComplete);
+        GameInstance->OnAuthStateChanged.AddDynamic(this, &ULoginWidget::HandleAuthStateChanged);
     }
     
     // Hide error text initially
@@ -87,7 +87,6 @@ void ULoginWidget::OnLoginClicked()
     UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
     if (GameInstance)
     {
-        UE_LOG(LogTemp, Log, TEXT("Calling GameInstance->Login"));
         GameInstance->Login(Email, Password);
     }
     else
@@ -103,8 +102,6 @@ void ULoginWidget::OnLoginClicked()
 
 void ULoginWidget::OnSignupClicked()
 {
-    // This would typically switch to a signup widget
-    // For simplicity, we'll reuse this widget but you might want separate widgets
     if (!EmailInput || !PasswordInput)
     {
         return;
@@ -129,8 +126,7 @@ void ULoginWidget::OnSignupClicked()
         StatusText->SetText(FText::FromString("Creating account..."));
     }
     
-    // For signup, we need a username - you might want a separate input field
-    // For now, use email as username
+    // Use email as username for simplicity
     FString Username = Email;
     
     UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
@@ -177,21 +173,16 @@ void ULoginWidget::OnCloseClicked()
     RemoveFromParent();
 }
 
-void ULoginWidget::HandleLoginComplete(const FAuthResponse& AuthResponse)
+void ULoginWidget::HandleAuthStateChanged(bool bIsLoggedIn)
 {
-    UE_LOG(LogTemp, Log, TEXT("LoginWidget: HandleLoginComplete called. Success=%s, Error=%s"),
-        AuthResponse.bSuccess ? TEXT("true") : TEXT("false"),
-        *AuthResponse.ErrorMessage);
-    
-    // Unbind from events to prevent multiple calls
+    // Unbind from events
     UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
     if (GameInstance)
     {
-        GameInstance->OnAuthLoginComplete.RemoveDynamic(this, &ULoginWidget::HandleLoginComplete);
-        GameInstance->OnAuthSignupComplete.RemoveDynamic(this, &ULoginWidget::HandleLoginComplete);
+        GameInstance->OnAuthStateChanged.RemoveDynamic(this, &ULoginWidget::HandleAuthStateChanged);
     }
     
-    if (AuthResponse.bSuccess)
+    if (bIsLoggedIn)
     {
         if (StatusText)
         {
@@ -212,12 +203,8 @@ void ULoginWidget::HandleLoginComplete(const FAuthResponse& AuthResponse)
             StatusText->SetText(FText::FromString("Login failed"));
         }
         
-        if (ErrorText)
-        {
-            ErrorText->SetText(FText::FromString(AuthResponse.ErrorMessage));
-            ErrorText->SetVisibility(ESlateVisibility::Visible);
-            GetWorld()->GetTimerManager().SetTimer(ErrorClearTimer, this, &ULoginWidget::ClearError, 5.0f, false);
-        }
+        // Note: Error messages are handled by the GameInstance
+        // We'll keep the widget open so user can try again
     }
 }
 

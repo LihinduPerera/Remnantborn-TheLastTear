@@ -10,152 +10,152 @@
 #include "Components/VerticalBox.h"
 #include "Auth/LoginWidget.h"
 #include "Auth/UserProfileWidget.h"
-#include "ElectricDreamsSample/Remnantborn/OnlineService/HttpManager/HttpManager.h"
+#include "ElectricDreamsSample/Remnantborn/OnlineService/UEdsHttpService.h"
 #include "SessionInfo/SessionInfoObject.h"
 #include "MainMenuWidget.generated.h"
 
 UCLASS()
 class ELECTRICDREAMSSAMPLE_API UMainMenuWidget : public UUserWidget
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
     
 public:
-	virtual void NativeConstruct() override;
+    virtual void NativeConstruct() override;
     virtual void NativeDestruct() override;
     
 protected:
-	// === Multiplayer Handlers ===
-	UFUNCTION()
-	void OnHostButtonClicked();
+    // === Multiplayer Handlers ===
+    UFUNCTION()
+    void OnHostButtonClicked();
     
-	UFUNCTION()
-	void OnFindSessionsButtonClicked();
+    UFUNCTION()
+    void OnFindSessionsButtonClicked();
     
-	UFUNCTION()
-	void OnJoinButtonClicked();
+    UFUNCTION()
+    void OnJoinButtonClicked();
     
-	UFUNCTION()
-	void OnDirectJoinButtonClicked();
+    UFUNCTION()
+    void OnDirectJoinButtonClicked();
     
-	UFUNCTION()
-	void OnQuitButtonClicked();
+    UFUNCTION()
+    void OnQuitButtonClicked();
     
-	// ListView callbacks
-	UFUNCTION()
-	void OnSessionSelected(UObject* Item);
+    // === Authentication Handlers ===
+    UFUNCTION()
+    void OnLoginButtonClicked();
     
-	UFUNCTION()
-	void OnSessionDoubleClicked(UObject* Item);
+    UFUNCTION()
+    void OnProfileButtonClicked();
     
-	// === Authentication Handlers ===
-	UFUNCTION()
-	void OnLoginButtonClicked();
+    // ListView callbacks
+    UFUNCTION()
+    void OnSessionSelected(UObject* Item);
     
-	UFUNCTION()
-	void OnProfileButtonClicked();
+    UFUNCTION()
+    void OnSessionDoubleClicked(UObject* Item);
     
-	// Callbacks from GameInstance
-	UFUNCTION()
-	void HandleSessionSearchCompleted(bool bSuccess);
+    // Callbacks from GameInstance
+    UFUNCTION()
+    void HandleSessionSearchCompleted(bool bSuccess);
     
-	UFUNCTION()
-	void HandleCreateSessionSuccess();
+    UFUNCTION()
+    void HandleCreateSessionSuccess();
     
-	UFUNCTION()
-	void HandleCreateSessionFailed(const FString& ErrorMessage);
+    UFUNCTION()
+    void HandleCreateSessionFailed(const FString& ErrorMessage);
     
-	UFUNCTION()
-	void HandleJoinSessionFailed(const FString& ErrorMessage);
+    UFUNCTION()
+    void HandleJoinSessionFailed(const FString& ErrorMessage);
     
-    // FIXED: Single handler for both login and signup
-	UFUNCTION()
-	void HandleAuthComplete(const FAuthResponse& AuthResponse);
+    // Updated auth callbacks
+    UFUNCTION()
+    void HandleAuthStateChanged(bool bIsLoggedIn);
     
-	UFUNCTION()
-	void HandleProfileUpdated(const FUserProfile& UserProfile);
+    UFUNCTION()
+    void HandleProfileUpdated(const FUserProfile& UserProfile);
     
-	// Helper functions
-	void UpdateSessionList();
-	void UpdateUserInfo();
+    // Helper functions
+    void UpdateSessionList();
+    void UpdateUserInfo();
     void ClearError();
     void ShowError(const FString& Message);
     void SetStatusText(const FString& Message);
     
-	// Widget Components - Multiplayer
-	UPROPERTY(meta = (BindWidget))
-	UButton* HostButton;
+    // Widget Components - Multiplayer
+    UPROPERTY(meta = (BindWidget))
+    UButton* HostButton;
     
-	UPROPERTY(meta = (BindWidget))
-	UButton* FindSessionsButton;
+    UPROPERTY(meta = (BindWidget))
+    UButton* FindSessionsButton;
     
-	UPROPERTY(meta = (BindWidget))
-	UButton* JoinButton;
+    UPROPERTY(meta = (BindWidget))
+    UButton* JoinButton;
     
-	UPROPERTY(meta = (BindWidget))
-	UButton* DirectJoinButton;
+    UPROPERTY(meta = (BindWidget))
+    UButton* DirectJoinButton;
     
-	UPROPERTY(meta = (BindWidget))
-	UButton* QuitButton;
+    UPROPERTY(meta = (BindWidget))
+    UButton* QuitButton;
     
-	UPROPERTY(meta = (BindWidget))
-	UEditableTextBox* ServerNameTextBox;
+    UPROPERTY(meta = (BindWidget))
+    UEditableTextBox* ServerNameTextBox;
     
-	UPROPERTY(meta = (BindWidget))
-	UEditableTextBox* DirectIPTextBox;
+    UPROPERTY(meta = (BindWidget))
+    UEditableTextBox* DirectIPTextBox;
     
-	UPROPERTY(meta = (BindWidget))
-	UListView* SessionListView;
+    UPROPERTY(meta = (BindWidget))
+    UListView* SessionListView;
     
-	// Widget Components - Authentication
-	UPROPERTY(meta = (BindWidget))
-	UButton* LoginButton;
+    // Widget Components - Authentication
+    UPROPERTY(meta = (BindWidget))
+    UButton* LoginButton;
     
-	UPROPERTY(meta = (BindWidget))
-	UButton* ProfileButton;
+    UPROPERTY(meta = (BindWidget))
+    UButton* ProfileButton;
     
-	UPROPERTY(meta = (BindWidget))
-	UTextBlock* WelcomeText;
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* WelcomeText;
     
-	UPROPERTY(meta = (BindWidget))
-	UTextBlock* UserLevelText;
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* UserLevelText;
     
-	UPROPERTY(meta = (BindWidget))
-	UTextBlock* UserRemnantText;
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* UserRemnantText;
     
-	UPROPERTY(meta = (BindWidget))
-	UVerticalBox* UserInfoPanel;
+    UPROPERTY(meta = (BindWidget))
+    UVerticalBox* UserInfoPanel;
     
-	UPROPERTY(meta = (BindWidget))
-	UVerticalBox* LoginPanel;
+    UPROPERTY(meta = (BindWidget))
+    UVerticalBox* LoginPanel;
     
-	// Common Widgets
-	UPROPERTY(meta = (BindWidget))
-	UTextBlock* StatusText;
+    // Common Widgets
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* StatusText;
     
-	UPROPERTY(meta = (BindWidget))
-	UTextBlock* ErrorText;
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* ErrorText;
     
-	// Widget classes
-	UPROPERTY(EditAnywhere, Category = "Widgets")
-	TSubclassOf<ULoginWidget> LoginWidgetClass;
+    // Widget classes
+    UPROPERTY(EditAnywhere, Category = "Widgets")
+    TSubclassOf<ULoginWidget> LoginWidgetClass;
     
-	UPROPERTY(EditAnywhere, Category = "Widgets")
-	TSubclassOf<UUserProfileWidget> ProfileWidgetClass;
+    UPROPERTY(EditAnywhere, Category = "Widgets")
+    TSubclassOf<UUserProfileWidget> ProfileWidgetClass;
     
 private:
-	int32 SelectedSessionIndex;
-	TArray<USessionInfoObject*> SessionListItems;
+    int32 SelectedSessionIndex;
+    TArray<USessionInfoObject*> SessionListItems;
     
-	FTimerHandle ErrorClearTimer;
+    FTimerHandle ErrorClearTimer;
     
-	// Current user data
-	FUserProfile CurrentUserProfile;
-	bool bIsLoggedIn = false;
+    // Current user data
+    FUserProfile CurrentUserProfile;
+    bool bIsLoggedIn = false;
     
-	// Widget instances
-	UPROPERTY()
-	ULoginWidget* LoginWidget;
+    // Widget instances
+    UPROPERTY()
+    ULoginWidget* LoginWidget;
     
-	UPROPERTY()
-	UUserProfileWidget* ProfileWidget;
+    UPROPERTY()
+    UUserProfileWidget* ProfileWidget;
 };

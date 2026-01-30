@@ -71,27 +71,22 @@ void UMainMenuWidget::NativeConstruct()
         GameInstance->OnCreateSessionFailed.AddDynamic(this, &UMainMenuWidget::HandleCreateSessionFailed);
         GameInstance->OnJoinSessionFailed.AddDynamic(this, &UMainMenuWidget::HandleJoinSessionFailed);
         
-        // Authentication events - FIX: Use AddDynamic with correct syntax
-        GameInstance->OnAuthLoginComplete.AddDynamic(this, &UMainMenuWidget::HandleAuthComplete);
-        GameInstance->OnAuthSignupComplete.AddDynamic(this, &UMainMenuWidget::HandleAuthComplete);
+        // Updated auth events
+        GameInstance->OnAuthStateChanged.AddDynamic(this, &UMainMenuWidget::HandleAuthStateChanged);
         GameInstance->OnProfileUpdated.AddDynamic(this, &UMainMenuWidget::HandleProfileUpdated);
         
-        // Check if already logged in
-        if (GameInstance->IsLoggedIn())
+        // Check current auth state
+        bIsLoggedIn = GameInstance->IsLoggedIn();
+        if (bIsLoggedIn)
         {
             CurrentUserProfile = GameInstance->GetCurrentUserProfile();
-            bIsLoggedIn = true;
             UpdateUserInfo();
-            
-            if (StatusText)
-            {
-                StatusText->SetText(FText::FromString("Welcome back!"));
-            }
+            SetStatusText("Welcome back!");
         }
         else
         {
-            // Try to load saved auth
-            GameInstance->LoadSavedAuth();
+            UpdateUserInfo();
+            SetStatusText("Ready");
         }
     }
 
@@ -103,19 +98,11 @@ void UMainMenuWidget::NativeConstruct()
         ErrorText->SetVisibility(ESlateVisibility::Hidden);
     }
 
-    if (StatusText)
-    {
-        StatusText->SetText(FText::FromString("Ready"));
-    }
-
     // Set default server name
     if (ServerNameTextBox)
     {
         ServerNameTextBox->SetText(FText::FromString("MyLANServer"));
     }
-    
-    // Update UI based on login state
-    UpdateUserInfo();
 }
 
 void UMainMenuWidget::NativeDestruct()
@@ -250,14 +237,6 @@ void UMainMenuWidget::OnLoginButtonClicked()
         if (LoginWidget)
         {
             LoginWidget->AddToViewport(100); // Higher Z-order
-            
-            // Bind to login widget events
-            if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
-            {
-                // Temporarily bind directly to see login results
-                GameInstance->OnAuthLoginComplete.AddDynamic(this, &UMainMenuWidget::HandleAuthComplete);
-                GameInstance->OnAuthSignupComplete.AddDynamic(this, &UMainMenuWidget::HandleAuthComplete);
-            }
         }
     }
 }
@@ -335,19 +314,19 @@ void UMainMenuWidget::HandleJoinSessionFailed(const FString& ErrorMessage)
     ShowError(ErrorMessage);
 }
 
-// FIXED: Single handler for both login and signup
-void UMainMenuWidget::HandleAuthComplete(const FAuthResponse& AuthResponse)
+void UMainMenuWidget::HandleAuthStateChanged(bool bLoginState)
 {
-    UE_LOG(LogTemp, Log, TEXT("MainMenuWidget: Auth complete - Success: %s, Error: %s"), 
-        AuthResponse.bSuccess ? TEXT("true") : TEXT("false"),
-        *AuthResponse.ErrorMessage);
+    bIsLoggedIn = bLoginState;
     
-    if (AuthResponse.bSuccess)
+    if (bLoginState)
     {
-        bIsLoggedIn = true;
-        CurrentUserProfile = AuthResponse.UserProfile;
-        UpdateUserInfo();
+        UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+        if (GameInstance)
+        {
+            CurrentUserProfile = GameInstance->GetCurrentUserProfile();
+        }
         
+        UpdateUserInfo();
         SetStatusText("Login successful!");
         
         // Hide login widget if it exists
@@ -356,19 +335,12 @@ void UMainMenuWidget::HandleAuthComplete(const FAuthResponse& AuthResponse)
             LoginWidget->RemoveFromParent();
             LoginWidget = nullptr;
         }
-        
-        // Show success message briefly
-        FTimerHandle TimerHandle;
-        GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
-        {
-            SetStatusText("Ready");
-        }, 2.0f, false);
     }
     else
     {
-        bIsLoggedIn = false;
-        ShowError(AuthResponse.ErrorMessage);
-        SetStatusText("Login failed");
+        CurrentUserProfile = FUserProfile();
+        UpdateUserInfo();
+        SetStatusText("Logged out");
     }
 }
 
@@ -378,8 +350,14 @@ void UMainMenuWidget::HandleProfileUpdated(const FUserProfile& UserProfile)
         *UserProfile.Username, UserProfile.Level);
     
     CurrentUserProfile = UserProfile;
-    bIsLoggedIn = true;
-    UpdateUserInfo();
+    
+    // If we just got a profile update and we're not showing as logged in, update
+    if (UserProfile.bIsValid && !bIsLoggedIn)
+    {
+        bIsLoggedIn = true;
+        UpdateUserInfo();
+    }
+    
     SetStatusText("Profile updated");
 }
 
