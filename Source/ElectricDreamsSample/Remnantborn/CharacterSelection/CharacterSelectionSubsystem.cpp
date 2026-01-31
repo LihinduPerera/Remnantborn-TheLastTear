@@ -26,7 +26,7 @@ void UCharacterSelectionSubsystem::LoadAvailableCharacters()
     CharacterUnlockStatus.Empty();
 
     // Load all character data assets from the content browser
-    LoadCharactersFromDirectory(TEXT("/Game/Remnantborn/Characters"));
+    LoadCharactersFromDirectory(TEXT("/Game/Remnantborn/Blueprints/DataStructures/CharacterDataAsset"));
     
     // Initialize unlock status
     for (UCharacterDataAsset* Character : AvailableCharacters)
