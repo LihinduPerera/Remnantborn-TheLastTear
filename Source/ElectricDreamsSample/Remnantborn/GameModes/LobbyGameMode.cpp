@@ -38,12 +38,6 @@ void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
     
     // Update lobby state
     OnLobbyReadyChanged.Broadcast();
-    
-    // If we reached max players and countdown isn't active, auto-start countdown
-    if (CurrentPlayerCount >= MaxPlayers && !bCountdownActive)
-    {
-        StartMatchCountdown();
-    }
 }
 
 void ALobbyGameMode::Logout(AController* Exiting)
@@ -76,12 +70,8 @@ void ALobbyGameMode::SetMaxPlayers(int32 NewMaxPlayers)
     // Update session settings
     UpdateSessionSettings();
     
-    // Check if we can start countdown
-    if (CurrentPlayerCount >= MaxPlayers && !bCountdownActive)
-    {
-        StartMatchCountdown();
-    }
-    else if (bCountdownActive && CurrentPlayerCount < MaxPlayers)
+    // If countdown is active and we dropped below max players, cancel countdown
+    if (bCountdownActive && CurrentPlayerCount < MaxPlayers)
     {
         CancelMatchCountdown();
     }
