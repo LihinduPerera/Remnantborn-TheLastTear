@@ -1,4 +1,5 @@
 #include "LobbyPlayerController.h"
+#include "ElectricDreamsSample/Remnantborn/Widgets/Lobby/LobbyWidget.h"
 #include "ElectricDreamsSample/Remnantborn/GameModes/LobbyGameMode.h"
 #include "GameFramework/GameModeBase.h"
 #include "Net/UnrealNetwork.h"
@@ -7,6 +8,26 @@ void ALobbyPlayerController::BeginPlay()
 {
     Super::BeginPlay();
     SetupInputMode();
+    
+    // Create lobby widget if class is set
+    if (LobbyWidgetClass)
+    {
+        CreateLobbyWidget();
+    }
+}
+
+void ALobbyPlayerController::CreateLobbyWidget()
+{
+    if (!LobbyWidgetClass || LobbyWidget)
+    {
+        return;
+    }
+    
+    LobbyWidget = CreateWidget<ULobbyWidget>(this, LobbyWidgetClass);
+    if (LobbyWidget)
+    {
+        LobbyWidget->AddToViewport();
+    }
 }
 
 void ALobbyPlayerController::SetupInputMode()

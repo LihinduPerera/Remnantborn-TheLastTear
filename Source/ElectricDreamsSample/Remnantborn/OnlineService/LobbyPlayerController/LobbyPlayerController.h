@@ -30,9 +30,21 @@ public:
     UFUNCTION(BlueprintPure, Category = "Lobby")
     bool IsReady() const { return bIsReady; }
     
+    UFUNCTION(BlueprintCallable, Category = "Lobby")
+    void CreateLobbyWidget();
+    
+    UFUNCTION(BlueprintPure, Category = "Lobby")
+    class ULobbyWidget* GetLobbyWidget() const { return LobbyWidget; }
+    
 protected:
     UPROPERTY(ReplicatedUsing = OnRep_IsReady)
     bool bIsReady = false;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lobby")
+    TSubclassOf<class ULobbyWidget> LobbyWidgetClass;
+    
+    UPROPERTY()
+    class ULobbyWidget* LobbyWidget;
     
     UFUNCTION()
     void OnRep_IsReady();
