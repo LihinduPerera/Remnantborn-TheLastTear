@@ -11,6 +11,7 @@
 #include "SessionInfo/SessionInfoObject.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "TimerManager.h"
+#include "ElectricDreamsSample/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
 
 void UMainMenuWidget::NativeConstruct()
 {
@@ -118,6 +119,13 @@ void UMainMenuWidget::NativeConstruct()
     if (ServerNameTextBox)
     {
         ServerNameTextBox->SetText(FText::FromString("MyLANServer"));
+    }
+    
+    // Initialize character subsystem
+    UCharacterSelectionSubsystem* CharacterSubsystem = GetGameInstance()->GetSubsystem<UCharacterSelectionSubsystem>();
+    if (CharacterSubsystem)
+    {
+        CharacterSubsystem->LoadAvailableCharacters();
     }
 }
 

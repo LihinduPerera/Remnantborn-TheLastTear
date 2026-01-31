@@ -15,7 +15,10 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void PostLogin(APlayerController* NewPlayer) override;
-
+    
 private:
 	void SetupPlayerInput(APlayerController* PlayerController);
+    
+    // Spawn player with selected character
+    void SpawnPlayerWithCharacter(APlayerController* PlayerController);
 };

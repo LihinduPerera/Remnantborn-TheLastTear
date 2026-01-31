@@ -27,7 +27,8 @@ public class ElectricDreamsSample : ModuleRules
 			"Slate",
 			"SlateCore",
 			"UMG",
-			"OnlineSubsystemNull"
+			"OnlineSubsystemNull",
+			"JsonUtilities"  // Add this if not present
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
