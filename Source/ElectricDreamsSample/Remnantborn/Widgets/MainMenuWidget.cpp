@@ -98,6 +98,22 @@ void UMainMenuWidget::NativeConstruct()
         ErrorText->SetVisibility(ESlateVisibility::Hidden);
     }
 
+    // Initialize lobby settings
+    if (MaxPlayersComboBox)
+    {
+        MaxPlayersComboBox->AddOption(TEXT("2 Players"));
+        MaxPlayersComboBox->AddOption(TEXT("4 Players"));
+        MaxPlayersComboBox->SetSelectedOption(TEXT("2 Players"));
+        MaxPlayersComboBox->OnSelectionChanged.AddDynamic(this, &UMainMenuWidget::OnMaxPlayersSelectionChanged);
+        SelectedMaxPlayers = 2;
+    }
+    
+    if (UseLobbyCheckBox)
+    {
+        UseLobbyCheckBox->SetIsChecked(bUseLobby);
+        UseLobbyCheckBox->OnCheckStateChanged.AddDynamic(this, &UMainMenuWidget::OnUseLobbyChanged);
+    }
+
     // Set default server name
     if (ServerNameTextBox)
     {
@@ -145,7 +161,18 @@ void UMainMenuWidget::OnHostButtonClicked()
     {
         SetStatusText("Creating session...");
         ClearError();
-        GameInstance->CreateSession(SessionName, 4);
+        
+        if (bUseLobby)
+        {
+            // Use lobby system
+            FString LobbyMapPath = "/Game/Remnantborn/Levels/Lobby";
+            GameInstance->CreateSessionWithLobby(SessionName, SelectedMaxPlayers, LobbyMapPath);
+        }
+        else
+        {
+            // Direct to game (old behavior)
+            GameInstance->CreateSession(SessionName, SelectedMaxPlayers);
+        }
     }
 }
 
@@ -509,4 +536,21 @@ void UMainMenuWidget::UpdateUserInfo()
             UserRemnantText->SetText(FText::FromString(TEXT("Remnants: -")));
         }
     }
+}
+
+void UMainMenuWidget::OnMaxPlayersSelectionChanged(FString SelectedItem, ESelectInfo::Type SelectionType)
+{
+    if (SelectedItem == "2 Players")
+    {
+        SelectedMaxPlayers = 2;
+    }
+    else if (SelectedItem == "4 Players")
+    {
+        SelectedMaxPlayers = 4;
+    }
+}
+
+void UMainMenuWidget::OnUseLobbyChanged(bool bIsChecked)
+{
+    bUseLobby = bIsChecked;
 }

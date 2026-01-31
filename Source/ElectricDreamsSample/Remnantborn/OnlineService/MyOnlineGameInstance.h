@@ -73,6 +73,17 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Multiplayer")
     void LeaveGame();
     
+    // === Lobby Functions ===
+    UFUNCTION(BlueprintCallable, Category = "Multiplayer")
+    void CreateSessionWithLobby(FString SessionName = "LAN_Game", int32 MaxPlayers = 2, FString LobbyMapPath = "/Game/Remnantborn/Levels/Lobby");
+    
+    UFUNCTION(BlueprintCallable, Category = "Multiplayer")
+    void SetLobbyMapPath(const FString& NewLobbyMapPath);
+    
+    // === Getters for Lobby ===
+    UFUNCTION(BlueprintPure, Category = "Multiplayer")
+    FString GetLobbyMapPath() const { return LobbyMapPath; }
+    
     // === Authentication Functions ===
     UFUNCTION(BlueprintCallable, Category = "Authentication")
     void Login(const FString& Email, const FString& Password);
@@ -181,6 +192,7 @@ private:
     FString PendingSessionName;
     int32 PendingMaxPlayers;
     bool bIsHosting = false;
+    FString LobbyMapPath;
     
     // === Authentication ===
     UPROPERTY()

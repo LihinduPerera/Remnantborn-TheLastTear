@@ -8,6 +8,8 @@
 #include "Components/TextBlock.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/VerticalBox.h"
+#include "Components/ComboBoxString.h"
+#include "Components/CheckBox.h"
 #include "Auth/LoginWidget.h"
 #include "Auth/UserProfileWidget.h"
 #include "ElectricDreamsSample/Remnantborn/OnlineService/UEdsHttpService.h"
@@ -81,6 +83,20 @@ protected:
     void ShowError(const FString& Message);
     void SetStatusText(const FString& Message);
     
+    // Lobby Event Handlers
+    UFUNCTION()
+    void OnMaxPlayersSelectionChanged(FString SelectedItem, ESelectInfo::Type SelectionType);
+    
+    UFUNCTION()
+    void OnUseLobbyChanged(bool bIsChecked);
+    
+    // Widget Components - Lobby Settings
+    UPROPERTY(meta = (BindWidget))
+    class UComboBoxString* MaxPlayersComboBox;
+    
+    UPROPERTY(meta = (BindWidget))
+    class UCheckBox* UseLobbyCheckBox;
+    
     // Widget Components - Multiplayer
     UPROPERTY(meta = (BindWidget))
     UButton* HostButton;
@@ -151,6 +167,10 @@ private:
     // Current user data
     FUserProfile CurrentUserProfile;
     bool bIsLoggedIn = false;
+    
+    // Lobby settings
+    bool bUseLobby = true;
+    int32 SelectedMaxPlayers = 2;
     
     // Widget instances
     UPROPERTY()

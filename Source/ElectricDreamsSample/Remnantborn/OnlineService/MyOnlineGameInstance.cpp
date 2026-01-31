@@ -14,6 +14,7 @@ UMyOnlineGameInstance::UMyOnlineGameInstance()
     DefaultMaxPlayers = 4;
     bIsHosting = false;
     bIsLoggedIn = false;
+    LobbyMapPath = TEXT("/Game/Remnantborn/Levels/Lobby");
 }
 
 void UMyOnlineGameInstance::Init()
@@ -152,14 +153,14 @@ void UMyOnlineGameInstance::OnCreateSessionComplete(FName SessionName, bool bSuc
         bIsHosting = true;
         OnCreateSessionSuccess.Broadcast();
         
-        // Travel to the game map as listen server
-        if (!DefaultMapPath.IsEmpty())
+        // Travel to the LOBBY map instead of game map
+        if (!LobbyMapPath.IsEmpty())
         {
-            FString TravelPath = DefaultMapPath;
+            FString TravelPath = LobbyMapPath;
             TravelPath.RemoveFromStart(GetWorld()->StreamingLevelsPrefix);
             TravelPath += TEXT("?listen");
             
-            UE_LOG(LogTemp, Log, TEXT("Server traveling to: %s"), *TravelPath);
+            UE_LOG(LogTemp, Log, TEXT("Server traveling to lobby: %s"), *TravelPath);
             GetWorld()->ServerTravel(TravelPath);
         }
     }
@@ -798,3 +799,22 @@ void UMyOnlineGameInstance::SetAuthState(bool bLoggedIn, const FString& Token, c
         OnProfileUpdated.Broadcast(FUserProfile());
     }
 }
+
+void UMyOnlineGameInstance::CreateSessionWithLobby(FString SessionName, int32 MaxPlayers, FString InLobbyMapPath)
+{
+    // Only allow 2 or 4 players
+    if (MaxPlayers != 2 && MaxPlayers != 4)
+    {
+        MaxPlayers = 2; // Default to 2
+    }
+    
+    LobbyMapPath = InLobbyMapPath;
+    PendingMaxPlayers = MaxPlayers;
+    CreateSession(SessionName, MaxPlayers);
+}
+
+void UMyOnlineGameInstance::SetLobbyMapPath(const FString& NewLobbyMapPath)
+{
+    LobbyMapPath = NewLobbyMapPath;
+}
+

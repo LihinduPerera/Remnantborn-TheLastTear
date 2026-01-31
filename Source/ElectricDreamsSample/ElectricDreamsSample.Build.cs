@@ -26,7 +26,8 @@ public class ElectricDreamsSample : ModuleRules
 			"Sockets",
 			"Slate",
 			"SlateCore",
-			"UMG"
+			"UMG",
+			"OnlineSubsystemNull"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
@@ -38,7 +39,8 @@ public class ElectricDreamsSample : ModuleRules
 			"HTTP",
 			"Json",
 			"JsonUtilities",
-			"WebSockets"
+			"WebSockets",
+			"OnlineSubsystem"
 		});
 		
 		if (Target.Configuration == UnrealTargetConfiguration.Shipping)
