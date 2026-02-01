@@ -14,11 +14,6 @@ void ALobbyPlayerController::BeginPlay()
     Super::BeginPlay();
     SetupInputMode();
 
-    if (HasAuthority())
-    {
-        return;
-    }
-
     FTimerHandle WidgetTimer;
     FTimerDelegate WidgetDelegate;
     WidgetDelegate.BindUFunction(this, "CreateLobbyWidget");
