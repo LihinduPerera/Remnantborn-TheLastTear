@@ -21,6 +21,6 @@ protected:
 private:
 	void SetupPlayerInput(APlayerController* PlayerController);
     
-    // Spawn player with selected character
+    UFUNCTION()
     void SpawnPlayerWithCharacter(APlayerController* PlayerController);
 };
