@@ -17,9 +17,6 @@ public:
     void SetPlayerReady(bool bReady);
 
     UFUNCTION(BlueprintCallable, Category = "Lobby")
-    void Server_SetPlayerReady_Implementation(bool bReady);
-
-    UFUNCTION(BlueprintCallable, Category = "Lobby")
     void StartMatchCountdown();
 
     UFUNCTION(BlueprintCallable, Category = "Lobby")
@@ -37,11 +34,17 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Lobby")
     void CreateLobbyWidget();
 
+    UFUNCTION(Client, Reliable, Category = "Lobby")
+    void Client_ShowCharacterSelection();
+
     UFUNCTION(BlueprintCallable, Category = "Lobby")
     void ShowCharacterSelection();
 
     UFUNCTION(BlueprintCallable, Category = "Lobby")
-    void Server_ConfirmCharacterSelection_Implementation(FName CharacterID);
+    void HideCharacterSelection();
+
+    UFUNCTION(Client, Reliable, Category = "Lobby")
+    void Client_CleanupLobbyWidgets();
 
     UFUNCTION(BlueprintPure, Category = "Lobby")
     class ULobbyWidget* GetLobbyWidget() const { return LobbyWidget; }
@@ -74,6 +77,9 @@ protected:
     UFUNCTION()
     void HandleCharacterSelected(UCharacterDataAsset* CharacterData);
 
+    UFUNCTION()
+    void HandleCharacterCancelled(UCharacterDataAsset* CharacterData);
+
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
@@ -93,4 +99,7 @@ private:
 
     UFUNCTION(Server, Reliable, WithValidation)
     void Server_ConfirmCharacterSelection(FName CharacterID);
+
+    void Client_ShowCharacterSelection_Implementation();
+    void Client_CleanupLobbyWidgets_Implementation();
 };

@@ -37,6 +37,9 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Character Selection|Events")
     FOnCharacterConfirmed OnCharacterConfirmed;
 
+    UPROPERTY(BlueprintAssignable, Category = "Character Selection|Events")
+    FOnCharacterConfirmed OnCharacterCancelled;
+
 protected:
     // Widget components
     UPROPERTY(meta = (BindWidget))

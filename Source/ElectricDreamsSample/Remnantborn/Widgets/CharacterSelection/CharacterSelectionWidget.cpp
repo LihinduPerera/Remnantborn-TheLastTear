@@ -28,6 +28,10 @@ void UCharacterSelectionWidget::NativeConstruct()
 
 void UCharacterSelectionWidget::NativeDestruct()
 {
+    // Clean up event bindings
+    OnCharacterConfirmed.RemoveAll(this);
+    OnCharacterCancelled.RemoveAll(this);
+
     // Clean up character entries
     for (UCharacterEntryWidget* Entry : CharacterEntries)
     {
@@ -149,6 +153,9 @@ void UCharacterSelectionWidget::OnConfirmClicked()
 
 void UCharacterSelectionWidget::OnCancelClicked()
 {
+    // Broadcast cancellation
+    OnCharacterCancelled.Broadcast(nullptr);
+
     // Remove widget
     RemoveFromParent();
 }

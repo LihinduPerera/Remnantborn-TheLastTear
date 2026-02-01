@@ -34,6 +34,11 @@ void ALobbyPlayerController::CreateLobbyWidget()
     }
 }
 
+void ALobbyPlayerController::Client_ShowCharacterSelection_Implementation()
+{
+    ShowCharacterSelection();
+}
+
 void ALobbyPlayerController::ShowCharacterSelection()
 {
     if (!CharacterSelectionWidgetClass || CharacterSelectionWidget)
@@ -52,7 +57,44 @@ void ALobbyPlayerController::ShowCharacterSelection()
         }
 
         CharacterSelectionWidget->OnCharacterConfirmed.AddDynamic(this, &ALobbyPlayerController::HandleCharacterSelected);
+        CharacterSelectionWidget->OnCharacterCancelled.AddDynamic(this, &ALobbyPlayerController::HandleCharacterCancelled);
     }
+}
+
+void ALobbyPlayerController::HideCharacterSelection()
+{
+    if (CharacterSelectionWidget)
+    {
+        CharacterSelectionWidget->RemoveFromParent();
+        CharacterSelectionWidget = nullptr;
+    }
+
+    if (LobbyWidget)
+    {
+        LobbyWidget->SetVisibility(ESlateVisibility::Visible);
+        LobbyWidget->UpdateUI();
+    }
+}
+
+void ALobbyPlayerController::Client_CleanupLobbyWidgets_Implementation()
+{
+    if (CharacterSelectionWidget)
+    {
+        CharacterSelectionWidget->RemoveFromParent();
+        CharacterSelectionWidget = nullptr;
+    }
+
+    if (LobbyWidget)
+    {
+        LobbyWidget->RemoveFromParent();
+        LobbyWidget = nullptr;
+    }
+
+    FInputModeGameOnly InputMode;
+    SetInputMode(InputMode);
+    SetShowMouseCursor(false);
+    bEnableClickEvents = false;
+    bEnableMouseOverEvents = false;
 }
 
 void ALobbyPlayerController::HandleCharacterSelected(UCharacterDataAsset* CharacterData)
@@ -61,6 +103,13 @@ void ALobbyPlayerController::HandleCharacterSelected(UCharacterDataAsset* Charac
     {
         Server_ConfirmCharacterSelection(CharacterData->CharacterID);
     }
+    HideCharacterSelection();
+}
+
+void ALobbyPlayerController::HandleCharacterCancelled(UCharacterDataAsset* CharacterData)
+{
+    CharacterSelectionWidget = nullptr;
+    HideCharacterSelection();
 }
 
 void ALobbyPlayerController::SetupInputMode()

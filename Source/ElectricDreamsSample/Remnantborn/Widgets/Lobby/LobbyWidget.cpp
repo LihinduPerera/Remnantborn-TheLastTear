@@ -181,7 +181,7 @@ void ULobbyWidget::ShowCharacterSelection()
     ALobbyPlayerController* LobbyPC = GetLobbyPlayerController();
     if (LobbyPC)
     {
-        LobbyPC->ShowCharacterSelection();
+        LobbyPC->Client_ShowCharacterSelection();
     }
 }
 

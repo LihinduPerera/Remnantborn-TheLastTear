@@ -44,7 +44,7 @@ void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
     ALobbyPlayerController* LobbyPC = Cast<ALobbyPlayerController>(NewPlayer);
     if (LobbyPC)
     {
-        LobbyPC->ShowCharacterSelection();
+        LobbyPC->Client_ShowCharacterSelection();
     }
 
     UpdateGameState();
@@ -228,6 +228,14 @@ void ALobbyGameMode::StartMatchTravel()
     }
 
     UpdateSessionSettings();
+
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (ALobbyPlayerController* LobbyPC = Cast<ALobbyPlayerController>(It->Get()))
+        {
+            LobbyPC->Client_CleanupLobbyWidgets();
+        }
+    }
 
     FString TravelPath = GameMapPath + "?listen";
     GetWorld()->ServerTravel(TravelPath, true);
