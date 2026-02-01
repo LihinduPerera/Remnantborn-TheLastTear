@@ -1,19 +1,28 @@
 #include "LobbyPlayerController.h"
 #include "ElectricDreamsSample/Remnantborn/Widgets/Lobby/LobbyWidget.h"
 #include "ElectricDreamsSample/Remnantborn/GameModes/LobbyGameMode.h"
+#include "ElectricDreamsSample/Remnantborn/GameModes/LobbyGameState.h"
+#include "ElectricDreamsSample/Remnantborn/Widgets/CharacterSelection/CharacterSelectionWidget.h"
+#include "ElectricDreamsSample/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
+#include "ElectricDreamsSample/Remnantborn/CharacterSelection/CharacterPlayerState.h"
 #include "GameFramework/GameModeBase.h"
+#include "GameFramework/GameStateBase.h"
 #include "Net/UnrealNetwork.h"
 
 void ALobbyPlayerController::BeginPlay()
 {
     Super::BeginPlay();
     SetupInputMode();
-    
-    // Create lobby widget if class is set
-    if (LobbyWidgetClass)
+
+    if (HasAuthority())
     {
-        CreateLobbyWidget();
+        return;
     }
+
+    FTimerHandle WidgetTimer;
+    FTimerDelegate WidgetDelegate;
+    WidgetDelegate.BindUFunction(this, "CreateLobbyWidget");
+    GetWorld()->GetTimerManager().SetTimer(WidgetTimer, WidgetDelegate, 0.5f, false);
 }
 
 void ALobbyPlayerController::CreateLobbyWidget()
@@ -22,7 +31,7 @@ void ALobbyPlayerController::CreateLobbyWidget()
     {
         return;
     }
-    
+
     LobbyWidget = CreateWidget<ULobbyWidget>(this, LobbyWidgetClass);
     if (LobbyWidget)
     {
@@ -30,9 +39,37 @@ void ALobbyPlayerController::CreateLobbyWidget()
     }
 }
 
+void ALobbyPlayerController::ShowCharacterSelection()
+{
+    if (!CharacterSelectionWidgetClass || CharacterSelectionWidget)
+    {
+        return;
+    }
+
+    CharacterSelectionWidget = CreateWidget<UCharacterSelectionWidget>(this, CharacterSelectionWidgetClass);
+    if (CharacterSelectionWidget)
+    {
+        CharacterSelectionWidget->AddToViewport();
+
+        if (LobbyWidget)
+        {
+            LobbyWidget->SetVisibility(ESlateVisibility::Hidden);
+        }
+
+        CharacterSelectionWidget->OnCharacterConfirmed.AddDynamic(this, &ALobbyPlayerController::HandleCharacterSelected);
+    }
+}
+
+void ALobbyPlayerController::HandleCharacterSelected(UCharacterDataAsset* CharacterData)
+{
+    if (CharacterData)
+    {
+        Server_ConfirmCharacterSelection(CharacterData->CharacterID);
+    }
+}
+
 void ALobbyPlayerController::SetupInputMode()
 {
-    // Set UI input mode for lobby
     FInputModeUIOnly InputMode;
     SetInputMode(InputMode);
     SetShowMouseCursor(true);
@@ -55,17 +92,54 @@ bool ALobbyPlayerController::IsHost() const
 
 void ALobbyPlayerController::SetPlayerReady(bool bReady)
 {
+    if (!HasAuthority())
+    {
+        Server_SetPlayerReady(bReady);
+    }
+    else
+    {
+        Server_SetPlayerReady_Implementation(bReady);
+    }
+}
+
+bool ALobbyPlayerController::Server_SetPlayerReady_Validate(bool bReady)
+{
+    return true;
+}
+
+void ALobbyPlayerController::Server_SetPlayerReady_Implementation(bool bReady)
+{
     if (bIsReady != bReady)
     {
         bIsReady = bReady;
         OnRep_IsReady();
+
+        if (ALobbyGameMode* LobbyGM = Cast<ALobbyGameMode>(GetWorld()->GetAuthGameMode()))
+        {
+            LobbyGM->OnPlayerReadyChanged(this, bReady);
+        }
+
+        if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GetWorld()->GetGameState()))
+        {
+            LobbyGS->UpdatePlayerInfo(this, bIsReady, bHasSelectedCharacter);
+        }
     }
 }
 
 void ALobbyPlayerController::OnRep_IsReady()
 {
-    // Notify UI or other systems about ready state change
-    // This will be handled by the lobby widget
+    if (LobbyWidget)
+    {
+        LobbyWidget->UpdateUI();
+    }
+}
+
+void ALobbyPlayerController::OnRep_HasSelectedCharacter()
+{
+    if (LobbyWidget)
+    {
+        LobbyWidget->UpdateUI();
+    }
 }
 
 void ALobbyPlayerController::StartMatchCountdown()
@@ -74,7 +148,17 @@ void ALobbyPlayerController::StartMatchCountdown()
     {
         return;
     }
-    
+
+    Server_StartMatchCountdown();
+}
+
+bool ALobbyPlayerController::Server_StartMatchCountdown_Validate()
+{
+    return true;
+}
+
+void ALobbyPlayerController::Server_StartMatchCountdown_Implementation()
+{
     ALobbyGameMode* LobbyGameMode = Cast<ALobbyGameMode>(GetWorld()->GetAuthGameMode());
     if (LobbyGameMode)
     {
@@ -88,7 +172,17 @@ void ALobbyPlayerController::CancelMatchCountdown()
     {
         return;
     }
-    
+
+    Server_CancelMatchCountdown();
+}
+
+bool ALobbyPlayerController::Server_CancelMatchCountdown_Validate()
+{
+    return true;
+}
+
+void ALobbyPlayerController::Server_CancelMatchCountdown_Implementation()
+{
     ALobbyGameMode* LobbyGameMode = Cast<ALobbyGameMode>(GetWorld()->GetAuthGameMode());
     if (LobbyGameMode)
     {
@@ -102,7 +196,17 @@ void ALobbyPlayerController::SetMaxPlayers(int32 MaxPlayers)
     {
         return;
     }
-    
+
+    Server_SetMaxPlayers(MaxPlayers);
+}
+
+bool ALobbyPlayerController::Server_SetMaxPlayers_Validate(int32 MaxPlayers)
+{
+    return MaxPlayers == 2 || MaxPlayers == 4;
+}
+
+void ALobbyPlayerController::Server_SetMaxPlayers_Implementation(int32 MaxPlayers)
+{
     ALobbyGameMode* LobbyGameMode = Cast<ALobbyGameMode>(GetWorld()->GetAuthGameMode());
     if (LobbyGameMode)
     {
@@ -110,9 +214,47 @@ void ALobbyPlayerController::SetMaxPlayers(int32 MaxPlayers)
     }
 }
 
+bool ALobbyPlayerController::Server_ConfirmCharacterSelection_Validate(FName CharacterID)
+{
+    return !CharacterID.IsNone();
+}
+
+void ALobbyPlayerController::Server_ConfirmCharacterSelection_Implementation(FName CharacterID)
+{
+    if (!CharacterID.IsNone())
+    {
+        ACharacterPlayerState* PS = GetPlayerState<ACharacterPlayerState>();
+        if (PS)
+        {
+            UCharacterSelectionSubsystem* Subsystem = GetGameInstance()->GetSubsystem<UCharacterSelectionSubsystem>();
+            if (Subsystem)
+            {
+                UCharacterDataAsset* CharacterData = Subsystem->GetCharacterByID(CharacterID);
+                if (CharacterData)
+                {
+                    PS->SetSelectedCharacter(CharacterData);
+                    bHasSelectedCharacter = true;
+                    OnRep_HasSelectedCharacter();
+
+                    if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GetWorld()->GetGameState()))
+                    {
+                        LobbyGS->UpdatePlayerInfo(this, bIsReady, bHasSelectedCharacter);
+                    }
+
+                    if (ALobbyGameMode* LobbyGM = Cast<ALobbyGameMode>(GetWorld()->GetAuthGameMode()))
+                    {
+                        LobbyGM->OnPlayerSelectedCharacter(this, CharacterData);
+                    }
+                }
+            }
+        }
+    }
+}
+
 void ALobbyPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-    
+
     DOREPLIFETIME(ALobbyPlayerController, bIsReady);
+    DOREPLIFETIME(ALobbyPlayerController, bHasSelectedCharacter);
 }

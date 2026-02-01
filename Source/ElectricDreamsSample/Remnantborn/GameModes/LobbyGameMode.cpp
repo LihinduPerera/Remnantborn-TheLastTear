@@ -10,21 +10,19 @@
 #include "ElectricDreamsSample/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
 #include "ElectricDreamsSample/Remnantborn/CharacterSelection/CharacterPlayerState.h"
 #include "ElectricDreamsSample/Remnantborn/OnlineService/LobbyPlayerController/LobbyPlayerController.h"
+#include "ElectricDreamsSample/Remnantborn/GameModes/LobbyGameState.h"
 
 ALobbyGameMode::ALobbyGameMode()
 {
-    // Set player state class
     PlayerStateClass = ACharacterPlayerState::StaticClass();
-    
-    // Use lobby player controller
     PlayerControllerClass = ALobbyPlayerController::StaticClass();
+    GameStateClass = ALobbyGameState::StaticClass();
 }
 
 void ALobbyGameMode::BeginPlay()
 {
     Super::BeginPlay();
-    
-    // Initialize character subsystem
+
     UCharacterSelectionSubsystem* CharacterSubsystem = GetGameInstance()->GetSubsystem<UCharacterSelectionSubsystem>();
     if (CharacterSubsystem)
     {
@@ -35,109 +33,106 @@ void ALobbyGameMode::BeginPlay()
 void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
 {
     Super::PostLogin(NewPlayer);
-    
+
     CurrentPlayerCount++;
-    
-    // Show character selection for new player
-    ShowCharacterSelectionForPlayer(NewPlayer);
-    
-    // Update lobby state
-    OnLobbyReadyChanged.Broadcast();
+
+    if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
+    {
+        LobbyGS->CurrentPlayerCount = CurrentPlayerCount;
+    }
+
+    ALobbyPlayerController* LobbyPC = Cast<ALobbyPlayerController>(NewPlayer);
+    if (LobbyPC)
+    {
+        LobbyPC->ShowCharacterSelection();
+    }
+
+    UpdateGameState();
 }
 
 void ALobbyGameMode::Logout(AController* Exiting)
 {
     Super::Logout(Exiting);
-    
-    CurrentPlayerCount = FMath::Max(0, CurrentPlayerCount - 1);
-    
-    // Remove character selection
-    PlayerCharacterSelections.Remove(Cast<APlayerController>(Exiting));
-    
-    // Remove widget
-    UCharacterSelectionWidget** WidgetPtr = CharacterSelectionWidgets.Find(Cast<APlayerController>(Exiting));
-    if (WidgetPtr && *WidgetPtr)
+
+    APlayerController* PC = Cast<APlayerController>(Exiting);
+    if (PC)
     {
-        (*WidgetPtr)->RemoveFromParent();
-        CharacterSelectionWidgets.Remove(Cast<APlayerController>(Exiting));
+        PlayerCharacterSelections.Remove(PC);
+
+        if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
+        {
+            LobbyGS->RemovePlayerInfo(PC);
+        }
     }
-    
-    // Update lobby state
-    OnLobbyReadyChanged.Broadcast();
-    
-    // If we dropped below max players, cancel countdown
+
+    CurrentPlayerCount = FMath::Max(0, CurrentPlayerCount - 1);
+
+    if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
+    {
+        LobbyGS->CurrentPlayerCount = CurrentPlayerCount;
+    }
+
+    UpdateGameState();
+
     if (bCountdownActive && CurrentPlayerCount < MaxPlayers)
     {
         CancelMatchCountdown();
     }
 }
 
-void ALobbyGameMode::ShowCharacterSelectionForPlayer(APlayerController* PlayerController)
+void ALobbyGameMode::OnPlayerReadyChanged(APlayerController* PlayerController, bool bReady)
 {
-    if (!PlayerController || !CharacterSelectionWidgetClass)
+    if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
     {
-        return;
+        LobbyGS->UpdatePlayerInfo(PlayerController, bReady, PlayerCharacterSelections.Contains(PlayerController));
     }
-    
-    // Create character selection widget
-    UCharacterSelectionWidget* CharacterWidget = CreateWidget<UCharacterSelectionWidget>(PlayerController, CharacterSelectionWidgetClass);
-    if (CharacterWidget)
-    {
-        CharacterWidget->AddToViewport();
-        CharacterWidget->OnCharacterConfirmed.AddDynamic(this, &ALobbyGameMode::HandleCharacterSelected);
-        
-        CharacterSelectionWidgets.Add(PlayerController, CharacterWidget);
-        
-        // Set input mode for UI
-        FInputModeUIOnly InputMode;
-        InputMode.SetWidgetToFocus(CharacterWidget->TakeWidget());
-        InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-        PlayerController->SetInputMode(InputMode);
-        PlayerController->SetShowMouseCursor(true);
-    }
+
+    UpdateGameState();
 }
 
-bool ALobbyGameMode::HasPlayerSelectedCharacter(APlayerController* PlayerController) const
+void ALobbyGameMode::OnPlayerSelectedCharacter(APlayerController* PlayerController, UCharacterDataAsset* SelectedCharacter)
 {
-    return PlayerCharacterSelections.Contains(PlayerController) && PlayerCharacterSelections[PlayerController] != nullptr;
-}
-
-TArray<APlayerController*> ALobbyGameMode::GetPlayersWithCharacters() const
-{
-    TArray<APlayerController*> Players;
-    
-    for (auto& Pair : PlayerCharacterSelections)
+    if (PlayerController && SelectedCharacter)
     {
-        if (Pair.Key && Pair.Value)
+        PlayerCharacterSelections.Add(PlayerController, SelectedCharacter);
+
+        if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
         {
-            Players.Add(Pair.Key);
+            LobbyGS->UpdatePlayerInfo(PlayerController,
+                PlayerController->GetPlayerState<ALobbyPlayerController>() ? Cast<ALobbyPlayerController>(PlayerController)->IsReady() : false,
+                true);
+        }
+
+        UpdateGameState();
+
+        if (CanStartMatch())
+        {
+            StartMatchCountdown();
         }
     }
-    
-    return Players;
 }
 
 void ALobbyGameMode::SetMaxPlayers(int32 NewMaxPlayers)
 {
-    // Only allow 2 or 4 players
     if (NewMaxPlayers != 2 && NewMaxPlayers != 4)
     {
         UE_LOG(LogTemp, Warning, TEXT("LobbyGameMode: Max players must be 2 or 4"));
         return;
     }
-    
+
     MaxPlayers = NewMaxPlayers;
-    
-    // Update session settings
+
     UpdateSessionSettings();
-    
-    // If countdown is active and we dropped below max players, cancel countdown
+
+    if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
+    {
+        LobbyGS->MaxPlayers = MaxPlayers;
+    }
+
     if (bCountdownActive && CurrentPlayerCount < MaxPlayers)
     {
         CancelMatchCountdown();
     }
-    
-    OnLobbyReadyChanged.Broadcast();
 }
 
 void ALobbyGameMode::StartMatchCountdown()
@@ -146,11 +141,15 @@ void ALobbyGameMode::StartMatchCountdown()
     {
         return;
     }
-    
+
     bCountdownActive = true;
     CountdownTime = CountdownDuration;
-    
-    // Start countdown timer
+
+    if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
+    {
+        LobbyGS->SetCountdownState(true, CountdownTime);
+    }
+
     GetWorld()->GetTimerManager().SetTimer(
         CountdownTimerHandle,
         this,
@@ -158,9 +157,6 @@ void ALobbyGameMode::StartMatchCountdown()
         1.0f,
         true
     );
-    
-    OnLobbyCountdownStarted.Broadcast();
-    OnLobbyCountdownUpdated.Broadcast();
 }
 
 void ALobbyGameMode::CancelMatchCountdown()
@@ -169,11 +165,14 @@ void ALobbyGameMode::CancelMatchCountdown()
     {
         return;
     }
-    
+
     bCountdownActive = false;
     GetWorld()->GetTimerManager().ClearTimer(CountdownTimerHandle);
-    
-    OnLobbyCountdownCancelled.Broadcast();
+
+    if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
+    {
+        LobbyGS->SetCountdownState(false, 0);
+    }
 }
 
 void ALobbyGameMode::StartMatchImmediately()
@@ -182,23 +181,25 @@ void ALobbyGameMode::StartMatchImmediately()
     {
         return;
     }
-    
+
     StartMatchTravel();
 }
 
 bool ALobbyGameMode::CanStartMatch() const
 {
-    // All players must have selected characters AND we must have the right number of players
-    int32 PlayersWithCharacters = GetPlayersWithCharacters().Num();
+    int32 PlayersWithCharacters = PlayerCharacterSelections.Num();
     return PlayersWithCharacters == MaxPlayers && CurrentPlayerCount == MaxPlayers;
 }
 
 void ALobbyGameMode::UpdateCountdown()
 {
     CountdownTime--;
-    
-    OnLobbyCountdownUpdated.Broadcast();
-    
+
+    if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
+    {
+        LobbyGS->CountdownTime = CountdownTime;
+    }
+
     if (CountdownTime <= 0)
     {
         GetWorld()->GetTimerManager().ClearTimer(CountdownTimerHandle);
@@ -213,8 +214,7 @@ void ALobbyGameMode::StartMatchTravel()
         CancelMatchCountdown();
         return;
     }
-    
-    // Store character selections in player states
+
     for (auto& Pair : PlayerCharacterSelections)
     {
         if (Pair.Key && Pair.Value)
@@ -226,11 +226,9 @@ void ALobbyGameMode::StartMatchTravel()
             }
         }
     }
-    
-    // Update session to prevent new joins
+
     UpdateSessionSettings();
-    
-    // Travel to game map
+
     FString TravelPath = GameMapPath + "?listen";
     GetWorld()->ServerTravel(TravelPath, true);
 }
@@ -242,65 +240,28 @@ void ALobbyGameMode::UpdateSessionSettings()
     {
         return;
     }
-    
+
     IOnlineSessionPtr SessionInterface = OnlineSub->GetSessionInterface();
     if (!SessionInterface.IsValid())
     {
         return;
     }
-    
+
     FNamedOnlineSession* ExistingSession = SessionInterface->GetNamedSession(NAME_GameSession);
     if (ExistingSession)
     {
-        // Update session to not allow new joins during countdown
         ExistingSession->SessionSettings.bAllowJoinInProgress = !bCountdownActive;
         ExistingSession->SessionSettings.NumPublicConnections = MaxPlayers;
-        
-        // Update the session
+
         SessionInterface->UpdateSession(NAME_GameSession, ExistingSession->SessionSettings, true);
     }
 }
 
-void ALobbyGameMode::HandleCharacterSelected(UCharacterDataAsset* SelectedCharacter)
+void ALobbyGameMode::UpdateGameState()
 {
-    APlayerController* PlayerController = nullptr;
-    
-    // Find which player selected this character
-    for (auto& Pair : CharacterSelectionWidgets)
+    if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
     {
-        if (Pair.Key && Pair.Value && Pair.Value->GetIsVisible())
-        {
-            PlayerController = Pair.Key;
-            break;
-        }
-    }
-    
-    if (PlayerController && SelectedCharacter)
-    {
-        // Store selection
-        PlayerCharacterSelections.Add(PlayerController, SelectedCharacter);
-        
-        // Hide widget
-        UCharacterSelectionWidget** WidgetPtr = CharacterSelectionWidgets.Find(PlayerController);
-        if (WidgetPtr && *WidgetPtr)
-        {
-            (*WidgetPtr)->RemoveFromParent();
-            
-            // Reset input mode
-            FInputModeGameOnly GameInputMode;
-            PlayerController->SetInputMode(GameInputMode);
-            PlayerController->SetShowMouseCursor(false);
-        }
-        
-        // Notify selection
-        OnCharacterSelectionChanged.Broadcast(PlayerController);
-        OnLobbyReadyChanged.Broadcast();
-        
-        // Auto-start countdown if all players are ready
-        if (CanStartMatch())
-        {
-            StartMatchCountdown();
-        }
+        LobbyGS->NotifyStateChanged();
     }
 }
 

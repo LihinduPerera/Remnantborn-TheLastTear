@@ -15,10 +15,20 @@ void ACharacterPlayerState::SetSelectedCharacter(UCharacterDataAsset* Character)
     {
         SelectedCharacterID = Character->CharacterID;
         CachedCharacterData = Character;
-        
-        // Notify locally
+
         OnRep_SelectedCharacterID();
     }
+}
+
+bool ACharacterPlayerState::Server_SetSelectedCharacterID_Validate(FName CharacterID)
+{
+    return !CharacterID.IsNone();
+}
+
+void ACharacterPlayerState::Server_SetSelectedCharacterID_Implementation(FName CharacterID)
+{
+    SelectedCharacterID = CharacterID;
+    OnRep_SelectedCharacterID();
 }
 
 UCharacterDataAsset* ACharacterPlayerState::GetSelectedCharacter() const
@@ -34,11 +44,16 @@ FName ACharacterPlayerState::GetSelectedCharacterID() const
 void ACharacterPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-    
+
     DOREPLIFETIME(ACharacterPlayerState, SelectedCharacterID);
 }
 
 void ACharacterPlayerState::OnRep_SelectedCharacterID()
+{
+    CacheCharacterData();
+}
+
+void ACharacterPlayerState::CacheCharacterData()
 {
     if (GetWorld())
     {

@@ -1,5 +1,5 @@
 #include "LobbyWidget.h"
-#include "ElectricDreamsSample/Remnantborn/GameModes/LobbyGameMode.h"
+#include "ElectricDreamsSample/Remnantborn/GameModes/LobbyGameState.h"
 #include "ElectricDreamsSample/Remnantborn/OnlineService/LobbyPlayerController/LobbyPlayerController.h"
 #include "ElectricDreamsSample/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 #include "Components/TextBlock.h"
@@ -7,75 +7,65 @@
 #include "Components/VerticalBox.h"
 #include "Components/HorizontalBox.h"
 #include "PlayerListEntryWidget.h"
+#include "ElectricDreamsSample/Remnantborn/CharacterSelection/CharacterPlayerState.h"
 #include "Kismet/GameplayStatics.h"
 
 void ULobbyWidget::NativeConstruct()
 {
     Super::NativeConstruct();
-    
-    // Bind button events
+
     if (ReadyButton)
     {
         ReadyButton->OnClicked.AddDynamic(this, &ULobbyWidget::OnReadyButtonClicked);
     }
-    
+
     if (StartButton)
     {
         StartButton->OnClicked.AddDynamic(this, &ULobbyWidget::StartMatchCountdown);
     }
-    
+
     if (CancelButton)
     {
         CancelButton->OnClicked.AddDynamic(this, &ULobbyWidget::CancelMatchCountdown);
     }
-    
+
     if (LeaveButton)
     {
         LeaveButton->OnClicked.AddDynamic(this, &ULobbyWidget::LeaveLobby);
     }
-    
+
     if (Set2PlayersButton)
     {
         Set2PlayersButton->OnClicked.AddDynamic(this, &ULobbyWidget::OnSet2PlayersClicked);
     }
-    
+
     if (Set4PlayersButton)
     {
         Set4PlayersButton->OnClicked.AddDynamic(this, &ULobbyWidget::OnSet4PlayersClicked);
     }
-    
-    // Bind to lobby events
-    ALobbyGameMode* LobbyGameMode = GetLobbyGameMode();
-    if (LobbyGameMode)
+
+    if (SelectCharacterButton)
     {
-        LobbyGameMode->OnLobbyReadyChanged.AddDynamic(this, &ULobbyWidget::HandleLobbyReadyChanged);
-        LobbyGameMode->OnLobbyCountdownStarted.AddDynamic(this, &ULobbyWidget::HandleCountdownStarted);
-        LobbyGameMode->OnLobbyCountdownUpdated.AddDynamic(this, &ULobbyWidget::HandleCountdownUpdated);
-        LobbyGameMode->OnLobbyCountdownCancelled.AddDynamic(this, &ULobbyWidget::HandleCountdownCancelled);
+        SelectCharacterButton->OnClicked.AddDynamic(this, &ULobbyWidget::ShowCharacterSelection);
     }
-    
-    // Initial update
+
+    ALobbyGameState* LobbyGS = GetLobbyGameState();
+    if (LobbyGS)
+    {
+        LobbyGS->OnLobbyStateChanged.AddDynamic(this, &ULobbyWidget::HandleLobbyStateChanged);
+    }
+
     UpdateUI();
 }
 
 void ULobbyWidget::NativeDestruct()
 {
-    // Unbind events
-    ALobbyGameMode* LobbyGameMode = GetLobbyGameMode();
-    if (LobbyGameMode)
+    ALobbyGameState* LobbyGS = GetLobbyGameState();
+    if (LobbyGS)
     {
-        LobbyGameMode->OnLobbyReadyChanged.RemoveAll(this);
-        LobbyGameMode->OnLobbyCountdownStarted.RemoveAll(this);
-        LobbyGameMode->OnLobbyCountdownUpdated.RemoveAll(this);
-        LobbyGameMode->OnLobbyCountdownCancelled.RemoveAll(this);
+        LobbyGS->OnLobbyStateChanged.RemoveAll(this);
     }
-    
-    Super::NativeDestruct();
-}
 
-void ULobbyWidget::UpdatePlayerList()
-{
-    // Clear existing entries
     for (UPlayerListEntryWidget* Entry : PlayerEntries)
     {
         if (Entry)
@@ -84,35 +74,40 @@ void ULobbyWidget::UpdatePlayerList()
         }
     }
     PlayerEntries.Empty();
-    
+
+    Super::NativeDestruct();
+}
+
+void ULobbyWidget::UpdatePlayerList()
+{
+    for (UPlayerListEntryWidget* Entry : PlayerEntries)
+    {
+        if (Entry)
+        {
+            Entry->RemoveFromParent();
+        }
+    }
+    PlayerEntries.Empty();
+
     if (!PlayerListContainer || !PlayerListEntryClass)
     {
         return;
     }
-    
-    // Get all player controllers
-    UWorld* World = GetWorld();
-    if (!World)
+
+    ALobbyGameState* LobbyGS = GetLobbyGameState();
+    if (!LobbyGS)
     {
         return;
     }
-    
-    // This is a simplified version - in a real implementation,
-    // you would get player information from the game state or replicate it
-    for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+
+    for (const FLobbyPlayerInfo& PlayerInfo : LobbyGS->PlayerInfoArray)
     {
-        if (APlayerController* PC = It->Get())
+        UPlayerListEntryWidget* Entry = CreateWidget<UPlayerListEntryWidget>(this, PlayerListEntryClass);
+        if (Entry && PlayerListContainer)
         {
-            UPlayerListEntryWidget* Entry = CreateWidget<UPlayerListEntryWidget>(this, PlayerListEntryClass);
-            if (Entry && PlayerListContainer)
-            {
-                // Set player info
-                FString PlayerName = PC->IsLocalController() ? "You" : FString::Printf(TEXT("Player %d"), It.GetIndex());
-                Entry->SetPlayerInfo(PlayerName, false); // Ready status would come from player controller
-                
-                PlayerListContainer->AddChildToVerticalBox(Entry);
-                PlayerEntries.Add(Entry);
-            }
+            Entry->SetPlayerInfo(PlayerInfo.PlayerName, PlayerInfo.bIsReady, PlayerInfo.bHasSelectedCharacter);
+            PlayerListContainer->AddChildToVerticalBox(Entry);
+            PlayerEntries.Add(Entry);
         }
     }
 }
@@ -181,7 +176,16 @@ void ULobbyWidget::LeaveLobby()
     }
 }
 
-void ULobbyWidget::HandleLobbyReadyChanged()
+void ULobbyWidget::ShowCharacterSelection()
+{
+    ALobbyPlayerController* LobbyPC = GetLobbyPlayerController();
+    if (LobbyPC)
+    {
+        LobbyPC->ShowCharacterSelection();
+    }
+}
+
+void ULobbyWidget::HandleLobbyStateChanged()
 {
     UpdateUI();
 }
@@ -201,15 +205,15 @@ void ULobbyWidget::HandleCountdownCancelled()
     UpdateUI();
 }
 
-ALobbyGameMode* ULobbyWidget::GetLobbyGameMode() const
+ALobbyGameState* ULobbyWidget::GetLobbyGameState() const
 {
     UWorld* World = GetWorld();
     if (!World)
     {
         return nullptr;
     }
-    
-    return Cast<ALobbyGameMode>(World->GetAuthGameMode());
+
+    return Cast<ALobbyGameState>(World->GetGameState());
 }
 
 ALobbyPlayerController* ULobbyWidget::GetLobbyPlayerController() const
@@ -219,65 +223,67 @@ ALobbyPlayerController* ULobbyWidget::GetLobbyPlayerController() const
     {
         return nullptr;
     }
-    
+
     return Cast<ALobbyPlayerController>(World->GetFirstPlayerController());
 }
 
 void ULobbyWidget::UpdateUI()
 {
-    ALobbyGameMode* LobbyGameMode = GetLobbyGameMode();
+    ALobbyGameState* LobbyGS = GetLobbyGameState();
     ALobbyPlayerController* LobbyPC = GetLobbyPlayerController();
-    
-    if (!LobbyGameMode || !LobbyPC)
+
+    if (!LobbyGS || !LobbyPC)
     {
         return;
     }
-    
-    // Update player list
+
     UpdatePlayerList();
-    
-    // Update player count
     UpdatePlayerCountText();
-    
-    // Update countdown text
     UpdateCountdownText();
-    
-    // Update host controls visibility
     UpdateHostControls();
-    
-    // Update button states
-    if (ReadyButton)
+    UpdateReadyButton();
+
+    int32 ReadyPlayers = 0;
+    for (const FLobbyPlayerInfo& PlayerInfo : LobbyGS->PlayerInfoArray)
     {
-        FText ButtonText = LobbyPC->IsReady() ? FText::FromString("Not Ready") : FText::FromString("Ready");
-        // In C++ we need to access the button's text differently or use a different approach
-        // For now, we'll just enable/disable based on logic
+        if (PlayerInfo.bHasSelectedCharacter)
+        {
+            ReadyPlayers++;
+        }
     }
-    
+
     if (StartButton)
     {
-        StartButton->SetIsEnabled(LobbyGameMode->CanStartMatch() && !LobbyGameMode->IsCountdownActive());
+        StartButton->SetIsEnabled(ReadyPlayers == LobbyGS->MaxPlayers && !LobbyGS->bCountdownActive);
     }
-    
+
     if (CancelButton)
     {
-        CancelButton->SetIsEnabled(LobbyGameMode->IsCountdownActive());
+        CancelButton->SetIsEnabled(LobbyGS->bCountdownActive);
     }
-    
+
+    if (SelectCharacterButton)
+    {
+        ACharacterPlayerState* PS = LobbyPC->GetPlayerState<ACharacterPlayerState>();
+        bool bHasCharacter = PS && PS->GetSelectedCharacter() != nullptr;
+        SelectCharacterButton->SetIsEnabled(!bHasCharacter && !LobbyGS->bCountdownActive);
+    }
+
     if (StatusText)
     {
-        if (LobbyGameMode->IsCountdownActive())
+        if (LobbyGS->bCountdownActive)
         {
             StatusText->SetText(FText::FromString("Match starting soon..."));
         }
-        else if (LobbyGameMode->CanStartMatch())
+        else if (ReadyPlayers == LobbyGS->MaxPlayers)
         {
             StatusText->SetText(FText::FromString("Ready to start!"));
         }
         else
         {
             FString Status = FString::Printf(TEXT("Waiting for players... (%d/%d)"),
-                LobbyGameMode->GetCurrentPlayerCount(),
-                LobbyGameMode->GetMaxPlayers());
+                LobbyGS->CurrentPlayerCount,
+                LobbyGS->MaxPlayers);
             StatusText->SetText(FText::FromString(Status));
         }
     }
@@ -285,29 +291,29 @@ void ULobbyWidget::UpdateUI()
 
 void ULobbyWidget::UpdatePlayerCountText()
 {
-    ALobbyGameMode* LobbyGameMode = GetLobbyGameMode();
-    if (!LobbyGameMode || !PlayerCountText)
+    ALobbyGameState* LobbyGS = GetLobbyGameState();
+    if (!LobbyGS || !PlayerCountText)
     {
         return;
     }
-    
+
     FString Text = FString::Printf(TEXT("Players: %d/%d"),
-        LobbyGameMode->GetCurrentPlayerCount(),
-        LobbyGameMode->GetMaxPlayers());
+        LobbyGS->CurrentPlayerCount,
+        LobbyGS->MaxPlayers);
     PlayerCountText->SetText(FText::FromString(Text));
 }
 
 void ULobbyWidget::UpdateCountdownText()
 {
-    ALobbyGameMode* LobbyGameMode = GetLobbyGameMode();
-    if (!LobbyGameMode || !CountdownText)
+    ALobbyGameState* LobbyGS = GetLobbyGameState();
+    if (!LobbyGS || !CountdownText)
     {
         return;
     }
-    
-    if (LobbyGameMode->IsCountdownActive())
+
+    if (LobbyGS->bCountdownActive)
     {
-        FString Text = FString::Printf(TEXT("Starting in: %d"), LobbyGameMode->GetCountdownTime());
+        FString Text = FString::Printf(TEXT("Starting in: %d"), LobbyGS->CountdownTime);
         CountdownText->SetText(FText::FromString(Text));
         CountdownText->SetVisibility(ESlateVisibility::Visible);
     }
@@ -324,8 +330,28 @@ void ULobbyWidget::UpdateHostControls()
     {
         return;
     }
-    
-    // Only show host controls to the host
+
     bool bIsHost = LobbyPC->IsHost();
     HostControlsContainer->SetVisibility(bIsHost ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+}
+
+void ULobbyWidget::UpdateReadyButton()
+{
+    ALobbyPlayerController* LobbyPC = GetLobbyPlayerController();
+    if (!LobbyPC || !ReadyButton)
+    {
+        return;
+    }
+
+    ACharacterPlayerState* PS = LobbyPC->GetPlayerState<ACharacterPlayerState>();
+    bool bHasCharacter = PS && PS->GetSelectedCharacter() != nullptr;
+
+    if (bHasCharacter)
+    {
+        ReadyButton->SetIsEnabled(true);
+    }
+    else
+    {
+        ReadyButton->SetIsEnabled(false);
+    }
 }

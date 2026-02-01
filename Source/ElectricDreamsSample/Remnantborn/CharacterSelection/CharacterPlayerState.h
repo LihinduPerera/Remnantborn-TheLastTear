@@ -5,9 +5,6 @@
 #include "CharacterDataAsset.h"
 #include "CharacterPlayerState.generated.h"
 
-/**
- * Player state that stores character selection
- */
 UCLASS()
 class ELECTRICDREAMSSAMPLE_API ACharacterPlayerState : public APlayerState
 {
@@ -16,7 +13,6 @@ class ELECTRICDREAMSSAMPLE_API ACharacterPlayerState : public APlayerState
 public:
     ACharacterPlayerState();
 
-    // Character selection
     UFUNCTION(BlueprintCallable, Category = "Character Selection")
     void SetSelectedCharacter(UCharacterDataAsset* Character);
 
@@ -26,7 +22,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Character Selection")
     FName GetSelectedCharacterID() const;
 
-    // Replication
+    UFUNCTION(BlueprintCallable, Category = "Character Selection")
+    bool HasSelectedCharacter() const { return !SelectedCharacterID.IsNone(); }
+
+    UFUNCTION(Server, Reliable, WithValidation, Category = "Character Selection")
+    void Server_SetSelectedCharacterID(FName CharacterID);
+
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 protected:
@@ -34,11 +35,11 @@ protected:
     void OnRep_SelectedCharacterID();
 
 private:
-    // Selected character ID (replicated)
     UPROPERTY(ReplicatedUsing = OnRep_SelectedCharacterID)
     FName SelectedCharacterID;
 
-    // Cached character data (not replicated)
     UPROPERTY()
     UCharacterDataAsset* CachedCharacterData;
+
+    void CacheCharacterData();
 };
