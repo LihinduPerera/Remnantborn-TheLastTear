@@ -27,14 +27,8 @@ void AMultiplayerGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Set up input for all existing players
-	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-	{
-		if (APlayerController* PlayerController = It->Get())
-		{
-            SpawnPlayerWithCharacter(PlayerController);
-		}
-	}
+	// Don't spawn characters here - let PostLogin handle it properly
+	// This prevents double spawning and GAS initialization issues
 }
 
 void AMultiplayerGameMode::PostSeamlessTravel()
@@ -60,11 +54,12 @@ void AMultiplayerGameMode::PostLogin(APlayerController* NewPlayer)
 		return;
 	}
 
-	// Delay spawning to ensure PlayerState is replicated
+	// Use retry mechanism to wait for PlayerState replication
+	// This handles cases where PlayerState hasn't replicated yet
 	FTimerHandle SpawnTimer;
 	FTimerDelegate SpawnDelegate;
-	SpawnDelegate.BindUFunction(this, "SpawnPlayerWithCharacter", NewPlayer);
-	GetWorld()->GetTimerManager().SetTimer(SpawnTimer, SpawnDelegate, 1.0f, false);
+	SpawnDelegate.BindUFunction(this, "RetrySpawnPlayerWithCharacter", NewPlayer, 0);
+	GetWorld()->GetTimerManager().SetTimer(SpawnTimer, SpawnDelegate, 0.1f, false);
 }
 
 void AMultiplayerGameMode::Logout(AController* Exiting)
@@ -114,15 +109,17 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
     if (!PlayerState)
     {
         UE_LOG(LogTemp, Warning, TEXT("PlayerState not found for player"));
+        // Use default spawning for safety
+        RestartPlayer(PlayerController);
         return;
     }
 
-    // Check if character selection is replicated (wait for replication if needed)
+    // Check if character selection is replicated
     if (!PlayerState->HasSelectedCharacter())
     {
-        UE_LOG(LogTemp, Warning, TEXT("No character selected for player"));
+        UE_LOG(LogTemp, Warning, TEXT("No character selected for player, using default character"));
 
-        // Spawn default character
+        // Spawn default character using standard GameMode method
         if (DefaultPawnClass)
         {
             RestartPlayer(PlayerController);
@@ -131,21 +128,11 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
     }
 
     UCharacterDataAsset* SelectedCharacter = PlayerState->GetSelectedCharacter();
-    if (!SelectedCharacter)
-    {
-        // Try to get from subsystem as fallback
-        UCharacterSelectionSubsystem* CharacterSubsystem = GetGameInstance()->GetSubsystem<UCharacterSelectionSubsystem>();
-        if (CharacterSubsystem)
-        {
-            SelectedCharacter = CharacterSubsystem->GetCharacterByID(PlayerState->GetSelectedCharacterID());
-        }
-    }
-
     if (!SelectedCharacter || !SelectedCharacter->CharacterClass)
     {
-        UE_LOG(LogTemp, Warning, TEXT("No character selected or invalid character class for player"));
-
-        // Spawn default character
+        UE_LOG(LogTemp, Warning, TEXT("Invalid character data, using default character"));
+        
+        // Fallback to default spawning
         if (DefaultPawnClass)
         {
             RestartPlayer(PlayerController);
@@ -153,48 +140,69 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
         return;
     }
 
-    // Find a player start
-    AActor* PlayerStart = FindPlayerStart(PlayerController);
-    if (!PlayerStart)
+    // Temporarily override the DefaultPawnClass for this player
+    TSubclassOf<APawn> OriginalPawnClass = DefaultPawnClass;
+    DefaultPawnClass = SelectedCharacter->CharacterClass;
+
+    // Use standard RestartPlayer to ensure proper initialization
+    RestartPlayer(PlayerController);
+
+    // Restore original default pawn class
+    DefaultPawnClass = OriginalPawnClass;
+
+    // Get the spawned pawn and grant abilities if it's our character
+    if (APawn* SpawnedPawn = PlayerController->GetPawn())
     {
-        UE_LOG(LogTemp, Warning, TEXT("No player start found"));
-        return;
-    }
-
-    // Spawn the character
-    FActorSpawnParameters SpawnParams;
-    SpawnParams.Owner = PlayerController;
-    SpawnParams.Instigator = nullptr;
-    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-    FVector SpawnLocation = PlayerStart->GetActorLocation();
-    FRotator SpawnRotation = PlayerStart->GetActorRotation();
-
-    ARemnantbornCharacterBase* SpawnedCharacter = GetWorld()->SpawnActor<ARemnantbornCharacterBase>(
-        SelectedCharacter->CharacterClass,
-        SpawnLocation,
-        SpawnRotation,
-        SpawnParams
-    );
-
-    if (SpawnedCharacter)
-    {
-        // Possess the character
-        PlayerController->Possess(SpawnedCharacter);
-
-        // Set up input for the player
-        SetupPlayerInput(PlayerController);
-
-        // Grant starting abilities
-        if (SelectedCharacter->StartingAbilities.Num() > 0)
+        ARemnantbornCharacterBase* CharacterBase = Cast<ARemnantbornCharacterBase>(SpawnedPawn);
+        if (CharacterBase && SelectedCharacter->StartingAbilities.Num() > 0)
         {
-            SpawnedCharacter->GrantAbilities(SelectedCharacter->StartingAbilities);
+            // Grant starting abilities (server only)
+            if (HasAuthority())
+            {
+                CharacterBase->GrantAbilities(SelectedCharacter->StartingAbilities);
+            }
         }
 
-        UE_LOG(LogTemp, Log, TEXT("Spawned character %s for player"), *SelectedCharacter->CharacterName.ToString());
+        UE_LOG(LogTemp, Log, TEXT("Successfully spawned character %s for player"), *SelectedCharacter->CharacterName.ToString());
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for player"));
     }
+
+    // Set up input for the player
+    SetupPlayerInput(PlayerController);
+}
+
+void AMultiplayerGameMode::RetrySpawnPlayerWithCharacter(APlayerController* PlayerController, int32 RetryCount)
+{
+    if (!PlayerController || !GetWorld())
+    {
+        return;
+    }
+
+    // Max retry limit
+    if (RetryCount >= 5)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to spawn player after 5 retries, using default character"));
+        if (DefaultPawnClass)
+        {
+            RestartPlayer(PlayerController);
+        }
+        return;
+    }
+
+    ACharacterPlayerState* PlayerState = PlayerController->GetPlayerState<ACharacterPlayerState>();
+    if (!PlayerState || !PlayerState->HasSelectedCharacter())
+    {
+        // Retry with delay
+        FTimerHandle RetryTimer;
+        FTimerDelegate RetryDelegate;
+        RetryDelegate.BindUFunction(this, "RetrySpawnPlayerWithCharacter", PlayerController, RetryCount + 1);
+        GetWorld()->GetTimerManager().SetTimer(RetryTimer, RetryDelegate, 0.5f, false);
+        return;
+    }
+
+    // PlayerState is ready, spawn the character
+    SpawnPlayerWithCharacter(PlayerController);
 }

@@ -1,4 +1,5 @@
 #include "MultiplayerPlayerController.h"
+#include "ElectricDreamsSample/Remnantborn/GameplayAbilitySystem/Characters/RemnantbornCharacterBase.h"
 
 void AMultiplayerPlayerController::BeginPlay()
 {
@@ -9,8 +10,16 @@ void AMultiplayerPlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
 
+	// Initialize GAS for the possessed pawn on server
 	if (HasAuthority())
 	{
+		ARemnantbornCharacterBase* RemnantbornCharacter = Cast<ARemnantbornCharacterBase>(InPawn);
+		if (RemnantbornCharacter && RemnantbornCharacter->GetAbilitySystemComponent())
+		{
+			// Ensure Ability System Component is properly initialized
+			RemnantbornCharacter->GetAbilitySystemComponent()->InitAbilityActorInfo(RemnantbornCharacter, RemnantbornCharacter);
+		}
+		
 		Client_SetupGameplayInput();
 	}
 }

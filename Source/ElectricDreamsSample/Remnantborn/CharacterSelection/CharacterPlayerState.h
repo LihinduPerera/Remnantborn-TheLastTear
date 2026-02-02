@@ -28,6 +28,14 @@ public:
     UFUNCTION(Server, Reliable, WithValidation, Category = "Character Selection")
     void Server_SetSelectedCharacterID(FName CharacterID);
 
+    // Called when character selection is ready (replicated)
+    UFUNCTION(BlueprintImplementableEvent, Category = "Character Selection")
+    void OnCharacterSelectionReady();
+
+    // Check if character data is ready to use
+    UFUNCTION(BlueprintCallable, Category = "Character Selection")
+    bool IsCharacterDataReady() const { return CachedCharacterData != nullptr; }
+
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 protected:

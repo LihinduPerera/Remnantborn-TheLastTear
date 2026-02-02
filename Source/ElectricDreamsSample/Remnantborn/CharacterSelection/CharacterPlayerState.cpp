@@ -51,6 +51,18 @@ void ACharacterPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 void ACharacterPlayerState::OnRep_SelectedCharacterID()
 {
     CacheCharacterData();
+    
+    // Notify clients that character selection has changed
+    if (GetNetMode() != NM_DedicatedServer)
+    {
+        UE_LOG(LogTemp, Log, TEXT("Character selection replicated: %s"), *SelectedCharacterID.ToString());
+    }
+
+    // Call Blueprint event when ready
+    if (IsCharacterDataReady())
+    {
+        OnCharacterSelectionReady();
+    }
 }
 
 void ACharacterPlayerState::CacheCharacterData()

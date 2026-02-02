@@ -99,7 +99,7 @@ void ALobbyGameMode::OnPlayerSelectedCharacter(APlayerController* PlayerControll
         if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
         {
             LobbyGS->UpdatePlayerInfo(PlayerController,
-                PlayerController->GetPlayerState<ALobbyPlayerController>() ? Cast<ALobbyPlayerController>(PlayerController)->IsReady() : false,
+                Cast<ALobbyPlayerController>(PlayerController) ? Cast<ALobbyPlayerController>(PlayerController)->IsReady() : false,
                 true);
         }
 

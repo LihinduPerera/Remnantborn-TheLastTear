@@ -23,4 +23,7 @@ private:
     
     UFUNCTION()
     void SpawnPlayerWithCharacter(APlayerController* PlayerController);
+
+    UFUNCTION()
+    void RetrySpawnPlayerWithCharacter(APlayerController* PlayerController, int32 RetryCount);
 };
