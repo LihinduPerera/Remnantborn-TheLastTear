@@ -12,11 +12,17 @@ class ELECTRICDREAMSSAMPLE_API AMultiplayerPlayerController : public APlayerCont
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnPossess(APawn* InPawn) override;
+	virtual void OnRep_PlayerState() override;
 
 public:
 	UFUNCTION(Client, Reliable)
 	void Client_SetupGameplayInput();
 
+	UFUNCTION(Client, Reliable)
+	void Client_InitializeHUD();
+
 private:
 	void SetupInputMode();
+	void InitializeHUD();
+	void SetupGASForPawn(APawn* InPawn);
 };

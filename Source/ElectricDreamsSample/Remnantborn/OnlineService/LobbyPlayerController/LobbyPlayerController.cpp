@@ -5,6 +5,7 @@
 #include "ElectricDreamsSample/Remnantborn/Widgets/CharacterSelection/CharacterSelectionWidget.h"
 #include "ElectricDreamsSample/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
 #include "ElectricDreamsSample/Remnantborn/CharacterSelection/CharacterPlayerState.h"
+#include "ElectricDreamsSample/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/GameStateBase.h"
 #include "Net/UnrealNetwork.h"
@@ -279,6 +280,12 @@ void ALobbyPlayerController::Server_ConfirmCharacterSelection_Implementation(FNa
                     PS->SetSelectedCharacter(CharacterData);
                     bHasSelectedCharacter = true;
                     OnRep_HasSelectedCharacter();
+
+                    // Store character selection in GameInstance for persistence during travel
+                    if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
+                    {
+                        GameInstance->SetLocalCharacterSelection(CharacterID);
+                    }
 
                     if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GetWorld()->GetGameState()))
                     {

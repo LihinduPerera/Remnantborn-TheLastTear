@@ -3,6 +3,7 @@
 #include "Components/CapsuleComponent.h"
 #include "ElectricDreamsSample/Remnantborn/GameplayAbilitySystem/AttributeSets/BasicAttributeSet.h"
 #include "AbilitySystemBlueprintLibrary.h"
+#include "ElectricDreamsSample/Remnantborn/CharacterSelection/CharacterPlayerState.h"
 #include "ElectricDreamsSample/Remnantborn/GameplayAbilitySystem/RemnantbornAbilitySystemComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
@@ -73,10 +74,18 @@ void ARemnantbornCharacterBase::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
 
-	if (AbilitySystemComponent)
+	// Initialize GAS on server
+	if (HasAuthority() && AbilitySystemComponent)
 	{
 		AbilitySystemComponent->InitAbilityActorInfo(this, this);
-		GrantAbilities(StartingAbilities);
+		
+		// Only grant starting abilities if no specific character data is available
+		// Character-specific abilities will be granted by the GameMode
+		ACharacterPlayerState* CharPlayerState = GetPlayerState<ACharacterPlayerState>();
+		if (!CharPlayerState || !CharPlayerState->IsCharacterDataReady())
+		{
+			GrantAbilities(StartingAbilities);
+		}
 	}
 }
 
@@ -84,7 +93,8 @@ void ARemnantbornCharacterBase::OnRep_PlayerState()
 {
 	Super::OnRep_PlayerState();
 
-	if (AbilitySystemComponent)
+	// Initialize GAS on clients when PlayerState replicates
+	if (AbilitySystemComponent && GetLocalRole() != ROLE_Authority)
 	{
 		AbilitySystemComponent->InitAbilityActorInfo(this, this);
 	}

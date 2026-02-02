@@ -818,3 +818,44 @@ void UMyOnlineGameInstance::SetLobbyMapPath(const FString& NewLobbyMapPath)
     LobbyMapPath = NewLobbyMapPath;
 }
 
+// === Character Selection Persistence ===
+
+void UMyOnlineGameInstance::SetLocalCharacterSelection(FName CharacterID)
+{
+    LocalCharacterSelection = CharacterID;
+    UE_LOG(LogTemp, Log, TEXT("Local character selection set to: %s"), *CharacterID.ToString());
+}
+
+void UMyOnlineGameInstance::ClearLocalCharacterSelection()
+{
+    LocalCharacterSelection = NAME_None;
+    UE_LOG(LogTemp, Log, TEXT("Local character selection cleared"));
+}
+
+void UMyOnlineGameInstance::TravelToGameLevel(FString GameMapPath)
+{
+    // Only server should initiate the travel
+    if (!bIsHosting)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Only server can initiate travel to game level"));
+        return;
+    }
+    
+    // Use default map path if none provided
+    if (GameMapPath.IsEmpty())
+    {
+        GameMapPath = DefaultMapPath;
+    }
+    
+    if (GetWorld())
+    {
+        // Remove streaming levels prefix if present
+        GameMapPath.RemoveFromStart(GetWorld()->StreamingLevelsPrefix);
+        
+        FString TravelPath = GameMapPath + TEXT("?listen");
+        
+        UE_LOG(LogTemp, Log, TEXT("Server traveling to game level: %s"), *TravelPath);
+        GetWorld()->ServerTravel(TravelPath);
+    }
+}
+

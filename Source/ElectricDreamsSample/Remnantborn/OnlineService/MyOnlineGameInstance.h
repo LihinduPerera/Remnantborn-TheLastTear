@@ -84,6 +84,19 @@ public:
     UFUNCTION(BlueprintPure, Category = "Multiplayer")
     FString GetLobbyMapPath() const { return LobbyMapPath; }
     
+    // === Character Selection Persistence ===
+    UFUNCTION(BlueprintCallable, Category = "Character Selection")
+    void SetLocalCharacterSelection(FName CharacterID);
+    
+    UFUNCTION(BlueprintPure, Category = "Character Selection")
+    FName GetLocalCharacterSelection() const { return LocalCharacterSelection; }
+    
+    UFUNCTION(BlueprintCallable, Category = "Character Selection")
+    void ClearLocalCharacterSelection();
+    
+    UFUNCTION(BlueprintCallable, Category = "Multiplayer")
+    void TravelToGameLevel(FString GameMapPath = "/Game/Remnantborn/Levels/TestGround");
+    
     // === Authentication Functions ===
     UFUNCTION(BlueprintCallable, Category = "Authentication")
     void Login(const FString& Email, const FString& Password);
@@ -193,6 +206,9 @@ private:
     int32 PendingMaxPlayers;
     bool bIsHosting = false;
     FString LobbyMapPath;
+    
+    // === Character Selection ===
+    FName LocalCharacterSelection;
     
     // === Authentication ===
     UPROPERTY()

@@ -37,6 +37,8 @@ public:
     bool IsCharacterDataReady() const { return CachedCharacterData != nullptr; }
 
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+    
+    virtual void BeginPlay() override;
 
 protected:
     UFUNCTION()
@@ -50,4 +52,9 @@ private:
     UCharacterDataAsset* CachedCharacterData;
 
     void CacheCharacterData();
+    
+    // Retry mechanism for character data caching
+    FTimerHandle RetryCacheHandle;
+    
+    void RetryCacheCharacterData(int32 RetryCount = 0);
 };
