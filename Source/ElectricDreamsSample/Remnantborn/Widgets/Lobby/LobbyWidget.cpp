@@ -246,7 +246,7 @@ void ULobbyWidget::UpdateUI()
     int32 ReadyPlayers = 0;
     for (const FLobbyPlayerInfo& PlayerInfo : LobbyGS->PlayerInfoArray)
     {
-        if (PlayerInfo.bHasSelectedCharacter)
+        if (PlayerInfo.bIsReady && PlayerInfo.bHasSelectedCharacter)
         {
             ReadyPlayers++;
         }
@@ -277,12 +277,12 @@ void ULobbyWidget::UpdateUI()
         }
         else if (ReadyPlayers == LobbyGS->MaxPlayers)
         {
-            StatusText->SetText(FText::FromString("Ready to start!"));
+            StatusText->SetText(FText::FromString("All players ready!"));
         }
         else
         {
-            FString Status = FString::Printf(TEXT("Waiting for players... (%d/%d)"),
-                LobbyGS->CurrentPlayerCount,
+            FString Status = FString::Printf(TEXT("Waiting for ready players... (%d/%d)"),
+                ReadyPlayers,
                 LobbyGS->MaxPlayers);
             StatusText->SetText(FText::FromString(Status));
         }

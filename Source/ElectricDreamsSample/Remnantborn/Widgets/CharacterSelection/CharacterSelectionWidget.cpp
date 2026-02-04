@@ -22,7 +22,8 @@ void UCharacterSelectionWidget::NativeConstruct()
         CancelButton->OnClicked.AddDynamic(this, &UCharacterSelectionWidget::OnCancelClicked);
     }
 
-    // Initialize character selection
+    // Initialize character selection - but don't auto-select first character
+    // Let the user explicitly select a character
     InitializeCharacterSelection();
 }
 
@@ -86,13 +87,8 @@ void UCharacterSelectionWidget::InitializeCharacterSelection()
                 CharacterListContainer->AddChildToVerticalBox(EntryWidget);
                 CharacterEntries.Add(EntryWidget);
 
-                // Select first character by default
-                if (!CurrentSelection)
-                {
-                    EntryWidget->SetSelected(true);
-                    CurrentSelection = CharacterData;
-                    UpdateSelectionDisplay(CharacterData);
-                }
+                // Don't auto-select first character - let user choose explicitly
+                // This ensures they must actively select a character before confirming
             }
         }
     }

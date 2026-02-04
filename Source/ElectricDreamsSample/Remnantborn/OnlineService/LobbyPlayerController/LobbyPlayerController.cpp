@@ -105,6 +105,12 @@ void ALobbyPlayerController::HandleCharacterSelected(UCharacterDataAsset* Charac
         Server_ConfirmCharacterSelection(CharacterData->CharacterID);
     }
     HideCharacterSelection();
+    
+    // Clear ready state when changing character selection
+    if (bIsReady)
+    {
+        SetPlayerReady(false);
+    }
 }
 
 void ALobbyPlayerController::HandleCharacterCancelled(UCharacterDataAsset* CharacterData)
@@ -154,6 +160,13 @@ bool ALobbyPlayerController::Server_SetPlayerReady_Validate(bool bReady)
 
 void ALobbyPlayerController::Server_SetPlayerReady_Implementation(bool bReady)
 {
+    // Players cannot be ready unless they have selected a character
+    if (bReady && !bHasSelectedCharacter)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Player cannot be ready without selecting a character"));
+        return;
+    }
+    
     if (bIsReady != bReady)
     {
         bIsReady = bReady;
@@ -167,6 +180,18 @@ void ALobbyPlayerController::Server_SetPlayerReady_Implementation(bool bReady)
         if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GetWorld()->GetGameState()))
         {
             LobbyGS->UpdatePlayerInfo(this, bIsReady, bHasSelectedCharacter);
+        }
+        
+        // Check if match can start after ready state change
+        if (bReady)
+        {
+            if (ALobbyGameMode* LobbyGM = Cast<ALobbyGameMode>(GetWorld()->GetAuthGameMode()))
+            {
+                if (LobbyGM->CanStartMatch())
+                {
+                    LobbyGM->StartMatchCountdown();
+                }
+            }
         }
     }
 }

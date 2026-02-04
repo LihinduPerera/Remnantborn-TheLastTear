@@ -31,6 +31,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "Lobby")
     bool IsReady() const { return bIsReady; }
 
+    UFUNCTION(BlueprintPure, Category = "Lobby")
+    bool HasSelectedCharacter() const { return bHasSelectedCharacter; }
+
     UFUNCTION(BlueprintCallable, Category = "Lobby")
     void CreateLobbyWidget();
 

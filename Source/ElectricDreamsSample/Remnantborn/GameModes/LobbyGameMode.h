@@ -65,6 +65,9 @@ protected:
     UFUNCTION()
     void UpdateSessionSettings();
 
+    UFUNCTION()
+    void ExecuteMatchTravel();
+
 private:
     UPROPERTY(EditDefaultsOnly, Category = "Lobby")
     int32 MaxPlayers = 2;

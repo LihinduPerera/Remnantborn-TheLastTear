@@ -103,6 +103,7 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
 {
     if (!PlayerController || !GetWorld())
     {
+        UE_LOG(LogTemp, Error, TEXT("SpawnPlayerWithCharacter: Invalid parameters"));
         return;
     }
 
@@ -116,16 +117,21 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
     ACharacterPlayerState* PlayerState = PlayerController->GetPlayerState<ACharacterPlayerState>();
     if (!PlayerState)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerState not found for player"));
+        UE_LOG(LogTemp, Warning, TEXT("PlayerState not found for player, using default character"));
         // Use default spawning for safety
         RestartPlayer(PlayerController);
         return;
     }
 
+    // Log character selection state
+    FName SelectedID = PlayerState->GetSelectedCharacterID();
+    UE_LOG(LogTemp, Log, TEXT("Attempting to spawn character %s for player %s"), 
+        *SelectedID.ToString(), *PlayerState->GetPlayerName());
+
     // Check if character selection is replicated
     if (!PlayerState->HasSelectedCharacter())
     {
-        UE_LOG(LogTemp, Warning, TEXT("No character selected for player, using default character"));
+        UE_LOG(LogTemp, Warning, TEXT("No character selected for player %s, using default character"), *PlayerState->GetPlayerName());
 
         // Spawn default character using standard GameMode method
         if (DefaultPawnClass)
@@ -136,9 +142,31 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
     }
 
     UCharacterDataAsset* SelectedCharacter = PlayerState->GetSelectedCharacter();
-    if (!SelectedCharacter || !SelectedCharacter->CharacterClass)
+    if (!SelectedCharacter)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Invalid character data, using default character"));
+        UE_LOG(LogTemp, Warning, TEXT("Character data not cached for player %s, retrying..."), *PlayerState->GetPlayerName());
+        
+        // Force retry of character data caching
+        if (PlayerState->IsCharacterDataReady())
+        {
+            SelectedCharacter = PlayerState->GetSelectedCharacter();
+        }
+        
+        if (!SelectedCharacter)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Still unable to get character data for player %s, using default character"), *PlayerState->GetPlayerName());
+            // Fallback to default spawning
+            if (DefaultPawnClass)
+            {
+                RestartPlayer(PlayerController);
+            }
+            return;
+        }
+    }
+
+    if (!SelectedCharacter->CharacterClass)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Invalid character class for %s, using default character"), *SelectedCharacter->CharacterName.ToString());
         
         // Fallback to default spawning
         if (DefaultPawnClass)
@@ -147,6 +175,9 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
         }
         return;
     }
+
+    UE_LOG(LogTemp, Log, TEXT("Spawning character class %s for player %s"), 
+        *SelectedCharacter->CharacterClass->GetName(), *PlayerState->GetPlayerName());
 
     // Override the DefaultPawnClass for this player temporarily
     TSubclassOf<APawn> OriginalPawnClass = DefaultPawnClass;
@@ -176,16 +207,17 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
                 }
             }
             
-            UE_LOG(LogTemp, Log, TEXT("Successfully spawned character %s for player"), *SelectedCharacter->CharacterName.ToString());
+            UE_LOG(LogTemp, Log, TEXT("Successfully spawned character %s for player %s"), 
+                *SelectedCharacter->CharacterName.ToString(), *PlayerState->GetPlayerName());
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("Spawned pawn is not a RemnantbornCharacterBase"));
+            UE_LOG(LogTemp, Warning, TEXT("Spawned pawn is not a RemnantbornCharacterBase for player %s"), *PlayerState->GetPlayerName());
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for player"));
+        UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for player %s"), *PlayerState->GetPlayerName());
     }
 
     // Set up input for the player

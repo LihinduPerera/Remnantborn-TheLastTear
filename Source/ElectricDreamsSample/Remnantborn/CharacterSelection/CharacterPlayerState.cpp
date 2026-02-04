@@ -32,6 +32,14 @@ void ACharacterPlayerState::SetSelectedCharacter(UCharacterDataAsset* Character)
         SelectedCharacterID = Character->CharacterID;
         CachedCharacterData = Character;
 
+        UE_LOG(LogTemp, Log, TEXT("CharacterPlayerState: Set character to %s"), *SelectedCharacterID.ToString());
+
+        // Force replication immediately if we're on server
+        if (GetNetMode() != NM_Client)
+        {
+            ForceNetUpdate();
+        }
+
         OnRep_SelectedCharacterID();
     }
 }
@@ -44,6 +52,13 @@ bool ACharacterPlayerState::Server_SetSelectedCharacterID_Validate(FName Charact
 void ACharacterPlayerState::Server_SetSelectedCharacterID_Implementation(FName CharacterID)
 {
     SelectedCharacterID = CharacterID;
+    
+    UE_LOG(LogTemp, Log, TEXT("CharacterPlayerState: Server received character selection %s for player %s"), 
+        *CharacterID.ToString(), *GetPlayerName());
+    
+    // Force immediate replication
+    ForceNetUpdate();
+    
     OnRep_SelectedCharacterID();
 }
 
@@ -61,7 +76,7 @@ void ACharacterPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-    DOREPLIFETIME_CONDITION(ACharacterPlayerState, SelectedCharacterID, COND_InitialOnly);
+    DOREPLIFETIME(ACharacterPlayerState, SelectedCharacterID);
 }
 
 void ACharacterPlayerState::OnRep_SelectedCharacterID()

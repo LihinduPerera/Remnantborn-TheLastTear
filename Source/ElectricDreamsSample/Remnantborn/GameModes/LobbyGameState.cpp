@@ -60,6 +60,14 @@ void ALobbyGameState::UpdatePlayerInfo(APlayerController* PlayerController, bool
         NewInfo.bIsReady = bReady;
         NewInfo.bHasSelectedCharacter = bHasCharacter;
         PlayerInfoArray.Add(NewInfo);
+        
+        UE_LOG(LogTemp, Log, TEXT("LobbyGameState: Added player %s (ID: %d) - Ready: %s, HasCharacter: %s"), 
+            *PlayerName, PlayerId, bReady ? TEXT("Yes") : TEXT("No"), bHasCharacter ? TEXT("Yes") : TEXT("No"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("LobbyGameState: Updated player %s (ID: %d) - Ready: %s, HasCharacter: %s"), 
+            *PlayerName, PlayerId, bReady ? TEXT("Yes") : TEXT("No"), bHasCharacter ? TEXT("Yes") : TEXT("No"));
     }
 }
 

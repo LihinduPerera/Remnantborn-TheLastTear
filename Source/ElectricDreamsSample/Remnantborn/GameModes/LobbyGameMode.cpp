@@ -88,6 +88,12 @@ void ALobbyGameMode::OnPlayerReadyChanged(APlayerController* PlayerController, b
     }
 
     UpdateGameState();
+    
+    // Cancel countdown if a player becomes unready during countdown
+    if (!bReady && bCountdownActive)
+    {
+        CancelMatchCountdown();
+    }
 }
 
 void ALobbyGameMode::OnPlayerSelectedCharacter(APlayerController* PlayerController, UCharacterDataAsset* SelectedCharacter)
@@ -105,10 +111,8 @@ void ALobbyGameMode::OnPlayerSelectedCharacter(APlayerController* PlayerControll
 
         UpdateGameState();
 
-        if (CanStartMatch())
-        {
-            StartMatchCountdown();
-        }
+        // Don't auto-start countdown here anymore
+        // Match should only start when all players are explicitly ready
     }
 }
 
@@ -188,7 +192,26 @@ void ALobbyGameMode::StartMatchImmediately()
 bool ALobbyGameMode::CanStartMatch() const
 {
     int32 PlayersWithCharacters = PlayerCharacterSelections.Num();
-    return PlayersWithCharacters == MaxPlayers && CurrentPlayerCount == MaxPlayers;
+    
+    // Check if all players are present, have selected characters, AND are ready
+    if (PlayersWithCharacters != MaxPlayers || CurrentPlayerCount != MaxPlayers)
+    {
+        return false;
+    }
+    
+    // Check if all players are ready
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (ALobbyPlayerController* LobbyPC = Cast<ALobbyPlayerController>(It->Get()))
+        {
+            if (!LobbyPC->IsReady() || !LobbyPC->HasSelectedCharacter())
+            {
+                return false;
+            }
+        }
+    }
+    
+    return true;
 }
 
 void ALobbyGameMode::UpdateCountdown()
@@ -215,6 +238,13 @@ void ALobbyGameMode::StartMatchTravel()
         return;
     }
 
+    // Lock the lobby to prevent new players from joining
+    if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
+    {
+        LobbyGS->SetLobbyLocked(true);
+    }
+
+    // Ensure all player character selections are synchronized to PlayerState
     for (auto& Pair : PlayerCharacterSelections)
     {
         if (Pair.Key && Pair.Value)
@@ -223,12 +253,37 @@ void ALobbyGameMode::StartMatchTravel()
             if (PlayerState)
             {
                 PlayerState->SetSelectedCharacter(Pair.Value);
+                UE_LOG(LogTemp, Log, TEXT("Set character %s for player %s"), 
+                    *Pair.Value->CharacterName.ToString(), *PlayerState->GetPlayerName());
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("PlayerState not available for character synchronization"));
+            }
+        }
+    }
+
+    // Force replication of player state data
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (APlayerController* PC = It->Get())
+        {
+            if (ACharacterPlayerState* PlayerState = PC->GetPlayerState<ACharacterPlayerState>())
+            {
+                PlayerState->ForceNetUpdate();
             }
         }
     }
 
     UpdateSessionSettings();
 
+    // Small delay to ensure all data is replicated before travel
+    FTimerHandle TravelTimer;
+    FTimerDelegate TravelDelegate;
+    TravelDelegate.BindUFunction(this, "ExecuteMatchTravel");
+    GetWorld()->GetTimerManager().SetTimer(TravelTimer, TravelDelegate, 1.0f, false);
+
+    // Cleanup widgets
     for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
     {
         if (ALobbyPlayerController* LobbyPC = Cast<ALobbyPlayerController>(It->Get()))
@@ -236,8 +291,12 @@ void ALobbyGameMode::StartMatchTravel()
             LobbyPC->Client_CleanupLobbyWidgets();
         }
     }
+}
 
+void ALobbyGameMode::ExecuteMatchTravel()
+{
     FString TravelPath = GameMapPath + "?listen";
+    UE_LOG(LogTemp, Log, TEXT("Starting match travel to: %s"), *TravelPath);
     GetWorld()->ServerTravel(TravelPath, true);
 }
 
