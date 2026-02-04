@@ -13,12 +13,17 @@
 void ALobbyPlayerController::BeginPlay()
 {
     Super::BeginPlay();
-    SetupInputMode();
+    
+    // Only setup UI for local player controllers
+    if (IsLocalPlayerController())
+    {
+        SetupInputMode();
 
-    FTimerHandle WidgetTimer;
-    FTimerDelegate WidgetDelegate;
-    WidgetDelegate.BindUFunction(this, "CreateLobbyWidget");
-    GetWorld()->GetTimerManager().SetTimer(WidgetTimer, WidgetDelegate, 0.5f, false);
+        FTimerHandle WidgetTimer;
+        FTimerDelegate WidgetDelegate;
+        WidgetDelegate.BindUFunction(this, "CreateLobbyWidget");
+        GetWorld()->GetTimerManager().SetTimer(WidgetTimer, WidgetDelegate, 0.5f, false);
+    }
 }
 
 void ALobbyPlayerController::CreateLobbyWidget()

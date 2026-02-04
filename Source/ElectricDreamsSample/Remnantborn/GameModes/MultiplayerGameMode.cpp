@@ -5,6 +5,7 @@
 #include "ElectricDreamsSample/Remnantborn/GameplayAbilitySystem/Characters/RemnantbornCharacterBase.h"
 #include "ElectricDreamsSample/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
 #include "ElectricDreamsSample/Remnantborn/CharacterSelection/CharacterDataAsset.h"
+#include "ElectricDreamsSample/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 #include "ElectricDreamsSample/Remnantborn/OnlineService/MultiplayerPlayerController/MultiplayerPlayerController.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -183,6 +184,9 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
     TSubclassOf<APawn> OriginalPawnClass = DefaultPawnClass;
     DefaultPawnClass = SelectedCharacter->CharacterClass;
 
+    UE_LOG(LogTemp, Log, TEXT("Setting pawn class to %s for character %s"), 
+        *SelectedCharacter->CharacterClass->GetName(), *SelectedCharacter->CharacterName.ToString());
+
     // Use standard RestartPlayer to ensure proper initialization
     RestartPlayer(PlayerController);
 
@@ -232,9 +236,9 @@ void AMultiplayerGameMode::RetrySpawnPlayerWithCharacter(APlayerController* Play
     }
 
     // Max retry limit
-    if (RetryCount >= 10)
+    if (RetryCount >= 15)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to spawn player after 10 retries, using default character"));
+        UE_LOG(LogTemp, Error, TEXT("Failed to spawn player after 15 retries, using default character"));
         if (DefaultPawnClass)
         {
             RestartPlayer(PlayerController);
@@ -245,38 +249,51 @@ void AMultiplayerGameMode::RetrySpawnPlayerWithCharacter(APlayerController* Play
     ACharacterPlayerState* PlayerState = PlayerController->GetPlayerState<ACharacterPlayerState>();
     if (!PlayerState)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerState not available yet (retry %d/10)"), RetryCount + 1);
+        UE_LOG(LogTemp, Warning, TEXT("PlayerState not available yet (retry %d/15)"), RetryCount + 1);
         // Retry with delay
         FTimerHandle RetryTimer;
         FTimerDelegate RetryDelegate;
         RetryDelegate.BindUFunction(this, "RetrySpawnPlayerWithCharacter", PlayerController, RetryCount + 1);
-        GetWorld()->GetTimerManager().SetTimer(RetryTimer, RetryDelegate, 0.5f, false);
+        GetWorld()->GetTimerManager().SetTimer(RetryTimer, RetryDelegate, 0.3f, false);
         return;
     }
 
     if (!PlayerState->HasSelectedCharacter())
     {
-        UE_LOG(LogTemp, Warning, TEXT("Character selection not available yet (retry %d/10)"), RetryCount + 1);
+        UE_LOG(LogTemp, Warning, TEXT("Character selection not available yet (retry %d/15)"), RetryCount + 1);
+        
+        // Try to restore from GameInstance as backup
+        if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
+        {
+            FName LocalCharacterSelection = GameInstance->GetLocalCharacterSelection();
+            if (!LocalCharacterSelection.IsNone())
+            {
+                UE_LOG(LogTemp, Log, TEXT("Attempting to restore character selection from GameInstance: %s"), *LocalCharacterSelection.ToString());
+                PlayerState->Server_SetSelectedCharacterID(LocalCharacterSelection);
+            }
+        }
+        
         // Retry with delay
         FTimerHandle RetryTimer;
         FTimerDelegate RetryDelegate;
         RetryDelegate.BindUFunction(this, "RetrySpawnPlayerWithCharacter", PlayerController, RetryCount + 1);
-        GetWorld()->GetTimerManager().SetTimer(RetryTimer, RetryDelegate, 0.5f, false);
+        GetWorld()->GetTimerManager().SetTimer(RetryTimer, RetryDelegate, 0.3f, false);
         return;
     }
 
     if (!PlayerState->IsCharacterDataReady())
     {
-        UE_LOG(LogTemp, Warning, TEXT("Character data not ready yet (retry %d/10)"), RetryCount + 1);
+        UE_LOG(LogTemp, Warning, TEXT("Character data not ready yet (retry %d/15)"), RetryCount + 1);
         // Retry with delay
         FTimerHandle RetryTimer;
         FTimerDelegate RetryDelegate;
         RetryDelegate.BindUFunction(this, "RetrySpawnPlayerWithCharacter", PlayerController, RetryCount + 1);
-        GetWorld()->GetTimerManager().SetTimer(RetryTimer, RetryDelegate, 0.5f, false);
+        GetWorld()->GetTimerManager().SetTimer(RetryTimer, RetryDelegate, 0.3f, false);
         return;
     }
 
     // All checks passed, spawn the character
-    UE_LOG(LogTemp, Log, TEXT("Spawning character for player (attempt %d)"), RetryCount + 1);
+    UE_LOG(LogTemp, Log, TEXT("Spawning character for player %s (attempt %d)"), 
+        PlayerState ? *PlayerState->GetPlayerName() : TEXT("Unknown"), RetryCount + 1);
     SpawnPlayerWithCharacter(PlayerController);
 }

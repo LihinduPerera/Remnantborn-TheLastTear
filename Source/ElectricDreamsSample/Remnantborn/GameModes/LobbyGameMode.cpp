@@ -263,7 +263,7 @@ void ALobbyGameMode::StartMatchTravel()
         }
     }
 
-    // Force replication of player state data
+    // Force replication of player state data and ensure character data is ready
     for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
     {
         if (APlayerController* PC = It->Get())
@@ -271,6 +271,18 @@ void ALobbyGameMode::StartMatchTravel()
             if (ACharacterPlayerState* PlayerState = PC->GetPlayerState<ACharacterPlayerState>())
             {
                 PlayerState->ForceNetUpdate();
+                
+                // Double-check that character data is properly cached
+                if (!PlayerState->IsCharacterDataReady())
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("Character data not ready for player %s before travel"), 
+                        *PlayerState->GetPlayerName());
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Log, TEXT("Character data confirmed ready for player %s: %s"), 
+                        *PlayerState->GetPlayerName(), *PlayerState->GetSelectedCharacterID().ToString());
+                }
             }
         }
     }
