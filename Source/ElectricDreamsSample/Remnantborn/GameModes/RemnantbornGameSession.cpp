@@ -5,35 +5,35 @@ ARemnantbornGameSession::ARemnantbornGameSession()
     // GameSession persists through seamless travel by default
 }
 
-void ARemnantbornGameSession::StorePlayerCharacterSelection(int32 PlayerId, const FName& CharacterID)
+void ARemnantbornGameSession::StorePlayerCharacterSelection(const FString& PlayerName, const FName& CharacterID)
 {
-    if (PlayerId >= 0 && !CharacterID.IsNone())
+    if (!PlayerName.IsEmpty() && !CharacterID.IsNone())
     {
-        PlayerCharacterSelections.Add(PlayerId, CharacterID);
-        UE_LOG(LogTemp, Log, TEXT("GameSession: Stored character selection %s for player %d"), 
-            *CharacterID.ToString(), PlayerId);
+        PlayerCharacterSelections.Add(PlayerName, CharacterID);
+        UE_LOG(LogTemp, Log, TEXT("GameSession: Stored character selection %s for player %s"), 
+            *CharacterID.ToString(), *PlayerName);
     }
 }
 
-FName ARemnantbornGameSession::GetPlayerCharacterSelection(int32 PlayerId) const
+FName ARemnantbornGameSession::GetPlayerCharacterSelection(const FString& PlayerName) const
 {
-    if (const FName* FoundSelection = PlayerCharacterSelections.Find(PlayerId))
+    if (const FName* FoundSelection = PlayerCharacterSelections.Find(PlayerName))
     {
         return *FoundSelection;
     }
     return NAME_None;
 }
 
-bool ARemnantbornGameSession::HasPlayerCharacterSelection(int32 PlayerId) const
+bool ARemnantbornGameSession::HasPlayerCharacterSelection(const FString& PlayerName) const
 {
-    return PlayerCharacterSelections.Contains(PlayerId);
+    return PlayerCharacterSelections.Contains(PlayerName);
 }
 
-void ARemnantbornGameSession::RemovePlayerCharacterSelection(int32 PlayerId)
+void ARemnantbornGameSession::RemovePlayerCharacterSelection(const FString& PlayerName)
 {
-    if (PlayerCharacterSelections.Remove(PlayerId) > 0)
+    if (PlayerCharacterSelections.Remove(PlayerName) > 0)
     {
-        UE_LOG(LogTemp, Log, TEXT("GameSession: Removed character selection for player %d"), PlayerId);
+        UE_LOG(LogTemp, Log, TEXT("GameSession: Removed character selection for player %s"), *PlayerName);
     }
 }
 

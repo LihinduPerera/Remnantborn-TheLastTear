@@ -190,22 +190,38 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
     UE_LOG(LogTemp, Log, TEXT("Spawning character class %s for player %s"), 
         *SelectedCharacter->CharacterClass->GetName(), *PlayerState->GetPlayerName());
 
-    // Override the DefaultPawnClass for this player temporarily
-    TSubclassOf<APawn> OriginalPawnClass = DefaultPawnClass;
-    DefaultPawnClass = SelectedCharacter->CharacterClass;
-
-    UE_LOG(LogTemp, Log, TEXT("Setting pawn class to %s for character %s"), 
-        *SelectedCharacter->CharacterClass->GetName(), *SelectedCharacter->CharacterName.ToString());
-
-    // Use standard RestartPlayer to ensure proper initialization
-    RestartPlayer(PlayerController);
-
-    // Restore original default pawn class
-    DefaultPawnClass = OriginalPawnClass;
-
-    // Get the spawned pawn and set up GAS and abilities
-    if (APawn* SpawnedPawn = PlayerController->GetPawn())
+    // Find a player start for this player
+    AActor* StartSpot = FindPlayerStart(PlayerController);
+    if (!StartSpot)
     {
+        UE_LOG(LogTemp, Error, TEXT("No player start found for player %s"), *PlayerState->GetPlayerName());
+        return;
+    }
+    
+    FTransform SpawnTransform = StartSpot->GetActorTransform();
+    
+    // Spawn the character directly - this avoids race conditions with DefaultPawnClass
+    FActorSpawnParameters SpawnInfo;
+    SpawnInfo.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+    SpawnInfo.Owner = PlayerController;
+    SpawnInfo.Instigator = nullptr;
+    
+    APawn* SpawnedPawn = GetWorld()->SpawnActor<APawn>(SelectedCharacter->CharacterClass, SpawnTransform.GetLocation(), SpawnTransform.GetRotation().Rotator(), SpawnInfo);
+    
+    if (!SpawnedPawn)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to spawn character %s for player %s"), 
+            *SelectedCharacter->CharacterName.ToString(), *PlayerState->GetPlayerName());
+        return;
+    }
+    
+    // Possess the newly spawned pawn
+    PlayerController->Possess(SpawnedPawn);
+    
+    UE_LOG(LogTemp, Log, TEXT("Successfully spawned and possessed character %s for player %s"), 
+        *SelectedCharacter->CharacterName.ToString(), *PlayerState->GetPlayerName());
+
+    // Set up GAS and abilities for the spawned pawn
         ARemnantbornCharacterBase* CharacterBase = Cast<ARemnantbornCharacterBase>(SpawnedPawn);
         if (CharacterBase)
         {
@@ -247,20 +263,15 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
                     *SelectedCharacter->CharacterName.ToString());
             }
             
-            UE_LOG(LogTemp, Log, TEXT("Successfully spawned character %s for player %s"), 
+            UE_LOG(LogTemp, Log, TEXT("Successfully spawned character %s for player %s"),
                 *SelectedCharacter->CharacterName.ToString(), *PlayerState->GetPlayerName());
         }
         else
         {
             UE_LOG(LogTemp, Warning, TEXT("Spawned pawn is not a RemnantbornCharacterBase for player %s"), *PlayerState->GetPlayerName());
         }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for player %s"), *PlayerState->GetPlayerName());
-    }
 
-    // Set up input for the player
+        // Set up input for the player
     SetupPlayerInput(PlayerController);
 }
 
@@ -386,29 +397,43 @@ bool AMultiplayerGameMode::ApplyCharacterSelectionFromGameSession(APlayerControl
         return true;
     }
 
-    // Try to get selection from GameSession
-    ARemnantbornGameSession* RBGameSession = Cast<ARemnantbornGameSession>(this->GameSession);
-    if (!RBGameSession)
+    // Try to get selection from GameInstance (persists through seamless travel)
+    UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+    if (!GameInstance)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ApplyCharacterSelectionFromGameSession: GameSession is not ARemnantbornGameSession"));
+        UE_LOG(LogTemp, Warning, TEXT("ApplyCharacterSelectionFromGameSession: GameInstance is not UMyOnlineGameInstance (actual class: %s)"),
+            GetGameInstance() ? *GetGameInstance()->GetClass()->GetName() : TEXT("NULL"));
         return false;
     }
 
-    int32 PlayerId = PlayerState->GetPlayerId();
-    FName CharacterID = RBGameSession->GetPlayerCharacterSelection(PlayerId);
+    // Use player name instead of PlayerId because PlayerId can change during seamless travel
+    FString PlayerName = PlayerState->GetPlayerName();
+
+    // Debug: Log the GameInstance and all stored selections
+    UE_LOG(LogTemp, Log, TEXT("ApplyCharacterSelectionFromGameSession: Looking for player '%s' in GameInstance %p"),
+        *PlayerName, (void*)GameInstance);
+
+    TMap<FString, FName> AllSelections = GameInstance->GetAllCharacterSelections();
+    UE_LOG(LogTemp, Log, TEXT("ApplyCharacterSelectionFromGameSession: GameInstance has %d stored selections:"), AllSelections.Num());
+    for (const auto& Pair : AllSelections)
+    {
+        UE_LOG(LogTemp, Log, TEXT("  - Player: '%s' -> Character: '%s'"), *Pair.Key, *Pair.Value.ToString());
+    }
+
+    FName CharacterID = GameInstance->GetPlayerCharacterSelection(PlayerName);
 
     if (CharacterID.IsNone())
     {
-        UE_LOG(LogTemp, Verbose, TEXT("ApplyCharacterSelectionFromGameSession: No character selection stored for player %d"), PlayerId);
+        UE_LOG(LogTemp, Warning, TEXT("ApplyCharacterSelectionFromGameSession: No character selection stored for player '%s'"), *PlayerName);
         return false;
     }
 
     // Apply the character selection
     PlayerState->Server_SetSelectedCharacterID(CharacterID);
-    
-    UE_LOG(LogTemp, Log, TEXT("ApplyCharacterSelectionFromGameSession: Applied character %s for player %d (%s)"), 
-        *CharacterID.ToString(), PlayerId, *PlayerState->GetPlayerName());
-    
+
+    UE_LOG(LogTemp, Log, TEXT("ApplyCharacterSelectionFromGameSession: Applied character %s for player %s"),
+        *CharacterID.ToString(), *PlayerName);
+
     return true;
 }
 

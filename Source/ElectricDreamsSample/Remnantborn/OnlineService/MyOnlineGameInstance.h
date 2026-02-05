@@ -94,6 +94,25 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Character Selection")
     void ClearLocalCharacterSelection();
     
+    // === Multiplayer Character Selection Storage (persists through seamless travel) ===
+    UFUNCTION(BlueprintCallable, Category = "Character Selection")
+    void StorePlayerCharacterSelection(const FString& PlayerName, const FName& CharacterID);
+    
+    UFUNCTION(BlueprintPure, Category = "Character Selection")
+    FName GetPlayerCharacterSelection(const FString& PlayerName) const;
+    
+    UFUNCTION(BlueprintPure, Category = "Character Selection")
+    bool HasPlayerCharacterSelection(const FString& PlayerName) const;
+    
+    UFUNCTION(BlueprintCallable, Category = "Character Selection")
+    void RemovePlayerCharacterSelection(const FString& PlayerName);
+    
+    UFUNCTION(BlueprintCallable, Category = "Character Selection")
+    void ClearAllCharacterSelections();
+    
+    UFUNCTION(BlueprintPure, Category = "Character Selection")
+    TMap<FString, FName> GetAllCharacterSelections() const { return PlayerCharacterSelections; }
+    
     UFUNCTION(BlueprintCallable, Category = "Multiplayer")
     void TravelToGameLevel(FString GameMapPath = "/Game/Remnantborn/Levels/TestGround");
     
@@ -209,6 +228,10 @@ private:
     
     // === Character Selection ===
     FName LocalCharacterSelection;
+    
+    // Map to store all players' character selections (persists through seamless travel)
+    UPROPERTY()
+    TMap<FString, FName> PlayerCharacterSelections;
     
     // === Authentication ===
     UPROPERTY()

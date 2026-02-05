@@ -20,38 +20,38 @@ public:
      * Store a player's character selection before travel.
      * Call this in LobbyGameMode before ServerTravel.
      * 
-     * @param PlayerId - The unique player ID from PlayerState
+     * @param PlayerName - The player's name (more stable than PlayerId across seamless travel)
      * @param CharacterID - The selected character's ID (e.g., "Warrior", "Mage")
      */
     UFUNCTION(BlueprintCallable, Category = "Character Selection")
-    void StorePlayerCharacterSelection(int32 PlayerId, const FName& CharacterID);
+    void StorePlayerCharacterSelection(const FString& PlayerName, const FName& CharacterID);
 
     /**
      * Retrieve a player's character selection after travel.
      * Call this in MultiplayerGameMode when a player joins.
      * 
-     * @param PlayerId - The unique player ID from PlayerState
+     * @param PlayerName - The player's name (more stable than PlayerId across seamless travel)
      * @return The character ID, or NAME_None if not found
      */
     UFUNCTION(BlueprintCallable, Category = "Character Selection")
-    FName GetPlayerCharacterSelection(int32 PlayerId) const;
+    FName GetPlayerCharacterSelection(const FString& PlayerName) const;
 
     /**
      * Check if a player has a stored character selection.
      * 
-     * @param PlayerId - The unique player ID from PlayerState
+     * @param PlayerName - The player's name (more stable than PlayerId across seamless travel)
      * @return true if the player has a selection stored
      */
     UFUNCTION(BlueprintCallable, Category = "Character Selection")
-    bool HasPlayerCharacterSelection(int32 PlayerId) const;
+    bool HasPlayerCharacterSelection(const FString& PlayerName) const;
 
     /**
      * Remove a player's character selection (e.g., when they disconnect).
      * 
-     * @param PlayerId - The unique player ID from PlayerState
+     * @param PlayerName - The player's name (more stable than PlayerId across seamless travel)
      */
     UFUNCTION(BlueprintCallable, Category = "Character Selection")
-    void RemovePlayerCharacterSelection(int32 PlayerId);
+    void RemovePlayerCharacterSelection(const FString& PlayerName);
 
     /**
      * Clear all stored character selections.
@@ -63,16 +63,17 @@ public:
     /**
      * Get all stored character selections for debugging.
      * 
-     * @return Map of PlayerId to CharacterID
+     * @return Map of PlayerName to CharacterID
      */
     UFUNCTION(BlueprintCallable, Category = "Character Selection")
-    TMap<int32, FName> GetAllCharacterSelections() const { return PlayerCharacterSelections; }
+    TMap<FString, FName> GetAllCharacterSelections() const { return PlayerCharacterSelections; }
 
 private:
     /**
-     * Map of PlayerId to selected CharacterID.
+     * Map of PlayerName to selected CharacterID.
+     * Using player name instead of PlayerId because PlayerId can change during seamless travel.
      * This persists through seamless travel because GameSession is not destroyed during travel.
      */
     UPROPERTY()
-    TMap<int32, FName> PlayerCharacterSelections;
+    TMap<FString, FName> PlayerCharacterSelections;
 };

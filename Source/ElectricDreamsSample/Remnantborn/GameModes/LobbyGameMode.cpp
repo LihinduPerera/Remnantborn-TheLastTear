@@ -245,13 +245,13 @@ void ALobbyGameMode::StartMatchTravel()
         LobbyGS->SetLobbyLocked(true);
     }
 
-    // Get the GameSession to store character selections (persists through seamless travel)
-    ARemnantbornGameSession* RBGameSession = Cast<ARemnantbornGameSession>(this->GameSession);
-    if (RBGameSession)
+    // Get the GameInstance to store character selections (persists through seamless travel)
+    UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+    if (GameInstance)
     {
-        UE_LOG(LogTemp, Log, TEXT("LobbyGameMode: Storing character selections in GameSession before travel"));
-        
-        // Store all player character selections in the GameSession
+        UE_LOG(LogTemp, Log, TEXT("LobbyGameMode: Storing character selections in GameInstance before travel"));
+
+        // Store all player character selections in the GameInstance
         for (auto& Pair : PlayerCharacterSelections)
         {
             if (Pair.Key && Pair.Value)
@@ -259,24 +259,24 @@ void ALobbyGameMode::StartMatchTravel()
                 ACharacterPlayerState* PlayerState = Pair.Key->GetPlayerState<ACharacterPlayerState>();
                 if (PlayerState)
                 {
-                    int32 PlayerId = PlayerState->GetPlayerId();
+                    FString PlayerName = PlayerState->GetPlayerName();
                     FName CharacterID = Pair.Value->CharacterID;
-                    
-                    // Store in GameSession - this persists through seamless travel
-                    RBGameSession->StorePlayerCharacterSelection(PlayerId, CharacterID);
-                    
+
+                    // Store in GameInstance using player name (persists through seamless travel)
+                    GameInstance->StorePlayerCharacterSelection(PlayerName, CharacterID);
+
                     // Also set in PlayerState for immediate replication
                     PlayerState->SetSelectedCharacter(Pair.Value);
-                    
-                    UE_LOG(LogTemp, Log, TEXT("LobbyGameMode: Stored character %s for player %s (ID: %d)"), 
-                        *CharacterID.ToString(), *PlayerState->GetPlayerName(), PlayerId);
+
+                    UE_LOG(LogTemp, Log, TEXT("LobbyGameMode: Stored character %s for player %s"),
+                        *CharacterID.ToString(), *PlayerName);
                 }
             }
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("LobbyGameMode: GameSession is not ARemnantbornGameSession! Character selections may not persist."));
+        UE_LOG(LogTemp, Warning, TEXT("LobbyGameMode: GameInstance is not UMyOnlineGameInstance! Character selections may not persist."));
     }
 
     // Force replication of player state data and ensure character data is ready

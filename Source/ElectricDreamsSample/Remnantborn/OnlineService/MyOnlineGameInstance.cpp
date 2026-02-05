@@ -832,6 +832,44 @@ void UMyOnlineGameInstance::ClearLocalCharacterSelection()
     UE_LOG(LogTemp, Log, TEXT("Local character selection cleared"));
 }
 
+void UMyOnlineGameInstance::StorePlayerCharacterSelection(const FString& PlayerName, const FName& CharacterID)
+{
+    if (!PlayerName.IsEmpty() && !CharacterID.IsNone())
+    {
+        PlayerCharacterSelections.Add(PlayerName, CharacterID);
+        UE_LOG(LogTemp, Log, TEXT("GameInstance: Stored character selection %s for player %s"), 
+            *CharacterID.ToString(), *PlayerName);
+    }
+}
+
+FName UMyOnlineGameInstance::GetPlayerCharacterSelection(const FString& PlayerName) const
+{
+    if (const FName* FoundSelection = PlayerCharacterSelections.Find(PlayerName))
+    {
+        return *FoundSelection;
+    }
+    return NAME_None;
+}
+
+bool UMyOnlineGameInstance::HasPlayerCharacterSelection(const FString& PlayerName) const
+{
+    return PlayerCharacterSelections.Contains(PlayerName);
+}
+
+void UMyOnlineGameInstance::RemovePlayerCharacterSelection(const FString& PlayerName)
+{
+    if (PlayerCharacterSelections.Remove(PlayerName) > 0)
+    {
+        UE_LOG(LogTemp, Log, TEXT("GameInstance: Removed character selection for player %s"), *PlayerName);
+    }
+}
+
+void UMyOnlineGameInstance::ClearAllCharacterSelections()
+{
+    PlayerCharacterSelections.Empty();
+    UE_LOG(LogTemp, Log, TEXT("GameInstance: Cleared all character selections"));
+}
+
 void UMyOnlineGameInstance::TravelToGameLevel(FString GameMapPath)
 {
     // Only server should initiate the travel
