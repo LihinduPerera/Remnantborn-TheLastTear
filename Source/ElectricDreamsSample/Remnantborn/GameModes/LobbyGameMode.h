@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "ElectricDreamsSample/Remnantborn/CharacterSelection/CharacterDataAsset.h"
+#include "ElectricDreamsSample/Remnantborn/GameModes/RemnantbornGameSession.h"
 #include "GameFramework/GameModeBase.h"
 #include "LobbyGameMode.generated.h"
 

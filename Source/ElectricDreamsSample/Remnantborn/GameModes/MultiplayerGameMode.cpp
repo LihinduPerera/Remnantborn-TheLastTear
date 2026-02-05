@@ -10,11 +10,15 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerStart.h"
+#include "AbilitySystemComponent.h"
 
 AMultiplayerGameMode::AMultiplayerGameMode()
 {
 	// Set player state class
     PlayerStateClass = ACharacterPlayerState::StaticClass();
+    
+    // Set game session class - this persists through seamless travel
+    GameSessionClass = ARemnantbornGameSession::StaticClass();
     
 	// Default pawn class - will be overridden by character selection
 	static ConstructorHelpers::FClassFinder<APawn> PlayerPawnBPClass(TEXT("/Game/Remnantborn/Blueprints/GameplayAbilitySystem/Characters/BP_RemnantbornCharacterBase"));
@@ -55,12 +59,18 @@ void AMultiplayerGameMode::PostLogin(APlayerController* NewPlayer)
 		return;
 	}
 
-	// Ensure the player controller is of the correct type
+	// Check if player controller is the expected type (optional RPC features)
 	AMultiplayerPlayerController* MultiplayerPC = Cast<AMultiplayerPlayerController>(NewPlayer);
 	if (!MultiplayerPC)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PlayerController is not of type MultiplayerPlayerController"));
-		return;
+		UE_LOG(LogTemp, Log, TEXT("PostLogin: PlayerController is not MultiplayerPlayerController type, but will still spawn with character selection"));
+	}
+
+	// Try to apply character selection from GameSession (persisted from lobby)
+	// This must happen BEFORE spawning the player
+	if (ApplyCharacterSelectionFromGameSession(NewPlayer))
+	{
+		UE_LOG(LogTemp, Log, TEXT("PostLogin: Applied character selection from GameSession for player"));
 	}
 
 	// Use retry mechanism to wait for PlayerState replication and initialization
@@ -199,16 +209,42 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
         ARemnantbornCharacterBase* CharacterBase = Cast<ARemnantbornCharacterBase>(SpawnedPawn);
         if (CharacterBase)
         {
-            // Ensure GAS is properly initialized for the character
-            if (CharacterBase->GetAbilitySystemComponent())
+            UE_LOG(LogTemp, Log, TEXT("SpawnPlayerWithCharacter: Setting up GAS for character %s"), 
+                *SelectedCharacter->CharacterName.ToString());
+            
+            // Grant starting abilities if available
+            // Note: ASC is initialized in PossessedBy() on the character
+            if (UAbilitySystemComponent* ASC = CharacterBase->GetAbilitySystemComponent())
             {
-                CharacterBase->GetAbilitySystemComponent()->InitAbilityActorInfo(CharacterBase, CharacterBase);
+                int32 AbilityCount = SelectedCharacter->StartingAbilities.Num();
+                UE_LOG(LogTemp, Log, TEXT("SpawnPlayerWithCharacter: Character %s has %d starting abilities"), 
+                    *SelectedCharacter->CharacterName.ToString(), AbilityCount);
                 
-                // Grant starting abilities if available
-                if (SelectedCharacter->StartingAbilities.Num() > 0)
+                if (AbilityCount > 0)
                 {
-                    CharacterBase->GrantAbilities(SelectedCharacter->StartingAbilities);
+                    for (int32 i = 0; i < AbilityCount; ++i)
+                    {
+                        if (SelectedCharacter->StartingAbilities[i])
+                        {
+                            UE_LOG(LogTemp, Log, TEXT("SpawnPlayerWithCharacter: Ability %d: %s"), 
+                                i, *SelectedCharacter->StartingAbilities[i]->GetName());
+                        }
+                    }
+                    
+                    TArray<FGameplayAbilitySpecHandle> GrantedHandles = CharacterBase->GrantAbilities(SelectedCharacter->StartingAbilities);
+                    UE_LOG(LogTemp, Log, TEXT("SpawnPlayerWithCharacter: Granted %d abilities for character %s"), 
+                        GrantedHandles.Num(), *SelectedCharacter->CharacterName.ToString());
                 }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("SpawnPlayerWithCharacter: No starting abilities to grant for character %s"), 
+                        *SelectedCharacter->CharacterName.ToString());
+                }
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("SpawnPlayerWithCharacter: Character %s has no ASC!"), 
+                    *SelectedCharacter->CharacterName.ToString());
             }
             
             UE_LOG(LogTemp, Log, TEXT("Successfully spawned character %s for player %s"), 
@@ -235,13 +271,23 @@ void AMultiplayerGameMode::RetrySpawnPlayerWithCharacter(APlayerController* Play
         return;
     }
 
-    // Max retry limit
+    // Max retry limit - apply default character if we can't get a selection
     if (RetryCount >= 15)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to spawn player after 15 retries, using default character"));
-        if (DefaultPawnClass)
+        UE_LOG(LogTemp, Warning, TEXT("RetrySpawn: Max retries reached for player, attempting to apply default character"));
+        
+        // Try to apply default character
+        if (ApplyDefaultCharacterIfNeeded(PlayerController))
         {
-            RestartPlayer(PlayerController);
+            UE_LOG(LogTemp, Log, TEXT("RetrySpawn: Applied default character after max retries"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("RetrySpawn: Failed to apply default character, spawning with default pawn class"));
+            if (DefaultPawnClass)
+            {
+                RestartPlayer(PlayerController);
+            }
         }
         return;
     }
@@ -249,7 +295,7 @@ void AMultiplayerGameMode::RetrySpawnPlayerWithCharacter(APlayerController* Play
     ACharacterPlayerState* PlayerState = PlayerController->GetPlayerState<ACharacterPlayerState>();
     if (!PlayerState)
     {
-        UE_LOG(LogTemp, Warning, TEXT("PlayerState not available yet (retry %d/15)"), RetryCount + 1);
+        UE_LOG(LogTemp, Warning, TEXT("RetrySpawn: PlayerState not available yet (retry %d/15)"), RetryCount + 1);
         // Retry with delay
         FTimerHandle RetryTimer;
         FTimerDelegate RetryDelegate;
@@ -258,32 +304,55 @@ void AMultiplayerGameMode::RetrySpawnPlayerWithCharacter(APlayerController* Play
         return;
     }
 
+    // Try to apply character selection from GameSession if not already done
     if (!PlayerState->HasSelectedCharacter())
     {
-        UE_LOG(LogTemp, Warning, TEXT("Character selection not available yet (retry %d/15)"), RetryCount + 1);
+        if (ApplyCharacterSelectionFromGameSession(PlayerController))
+        {
+            UE_LOG(LogTemp, Log, TEXT("RetrySpawn: Applied character selection from GameSession (retry %d/15)"), RetryCount + 1);
+        }
+    }
+
+    if (!PlayerState->HasSelectedCharacter())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RetrySpawn: Character selection not available yet (retry %d/15)"), RetryCount + 1);
         
-        // Try to restore from GameInstance as backup
+        // Try to restore from GameInstance as backup (for listen server host)
         if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
         {
             FName LocalCharacterSelection = GameInstance->GetLocalCharacterSelection();
             if (!LocalCharacterSelection.IsNone())
             {
-                UE_LOG(LogTemp, Log, TEXT("Attempting to restore character selection from GameInstance: %s"), *LocalCharacterSelection.ToString());
+                UE_LOG(LogTemp, Log, TEXT("RetrySpawn: Restoring character selection from GameInstance: %s"), *LocalCharacterSelection.ToString());
                 PlayerState->Server_SetSelectedCharacterID(LocalCharacterSelection);
             }
         }
         
-        // Retry with delay
-        FTimerHandle RetryTimer;
-        FTimerDelegate RetryDelegate;
-        RetryDelegate.BindUFunction(this, "RetrySpawnPlayerWithCharacter", PlayerController, RetryCount + 1);
-        GetWorld()->GetTimerManager().SetTimer(RetryTimer, RetryDelegate, 0.3f, false);
-        return;
+        // For remote clients, give them more time to send their selection via RPC
+        // Don't apply default until we've given them enough chances
+        if (RetryCount < 10)
+        {
+            // Retry with delay
+            FTimerHandle RetryTimer;
+            FTimerDelegate RetryDelegate;
+            RetryDelegate.BindUFunction(this, "RetrySpawnPlayerWithCharacter", PlayerController, RetryCount + 1);
+            GetWorld()->GetTimerManager().SetTimer(RetryTimer, RetryDelegate, 0.3f, false);
+            return;
+        }
+        else
+        {
+            // We've waited long enough, apply default character
+            UE_LOG(LogTemp, Warning, TEXT("RetrySpawn: Waited %d retries, applying default character"), RetryCount);
+            if (ApplyDefaultCharacterIfNeeded(PlayerController))
+            {
+                UE_LOG(LogTemp, Log, TEXT("RetrySpawn: Applied default character"));
+            }
+        }
     }
 
     if (!PlayerState->IsCharacterDataReady())
     {
-        UE_LOG(LogTemp, Warning, TEXT("Character data not ready yet (retry %d/15)"), RetryCount + 1);
+        UE_LOG(LogTemp, Warning, TEXT("RetrySpawn: Character data not ready yet (retry %d/15)"), RetryCount + 1);
         // Retry with delay
         FTimerHandle RetryTimer;
         FTimerDelegate RetryDelegate;
@@ -293,7 +362,105 @@ void AMultiplayerGameMode::RetrySpawnPlayerWithCharacter(APlayerController* Play
     }
 
     // All checks passed, spawn the character
-    UE_LOG(LogTemp, Log, TEXT("Spawning character for player %s (attempt %d)"), 
+    UE_LOG(LogTemp, Log, TEXT("RetrySpawn: Spawning character for player %s (attempt %d)"), 
         PlayerState ? *PlayerState->GetPlayerName() : TEXT("Unknown"), RetryCount + 1);
     SpawnPlayerWithCharacter(PlayerController);
+}
+
+bool AMultiplayerGameMode::ApplyCharacterSelectionFromGameSession(APlayerController* PlayerController)
+{
+    if (!PlayerController)
+    {
+        return false;
+    }
+
+    ACharacterPlayerState* PlayerState = PlayerController->GetPlayerState<ACharacterPlayerState>();
+    if (!PlayerState)
+    {
+        return false;
+    }
+
+    // Check if we already have a selection
+    if (PlayerState->HasSelectedCharacter())
+    {
+        return true;
+    }
+
+    // Try to get selection from GameSession
+    ARemnantbornGameSession* RBGameSession = Cast<ARemnantbornGameSession>(this->GameSession);
+    if (!RBGameSession)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ApplyCharacterSelectionFromGameSession: GameSession is not ARemnantbornGameSession"));
+        return false;
+    }
+
+    int32 PlayerId = PlayerState->GetPlayerId();
+    FName CharacterID = RBGameSession->GetPlayerCharacterSelection(PlayerId);
+
+    if (CharacterID.IsNone())
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("ApplyCharacterSelectionFromGameSession: No character selection stored for player %d"), PlayerId);
+        return false;
+    }
+
+    // Apply the character selection
+    PlayerState->Server_SetSelectedCharacterID(CharacterID);
+    
+    UE_LOG(LogTemp, Log, TEXT("ApplyCharacterSelectionFromGameSession: Applied character %s for player %d (%s)"), 
+        *CharacterID.ToString(), PlayerId, *PlayerState->GetPlayerName());
+    
+    return true;
+}
+
+UCharacterDataAsset* AMultiplayerGameMode::GetDefaultCharacter() const
+{
+    if (UCharacterSelectionSubsystem* CharacterSubsystem = GetGameInstance()->GetSubsystem<UCharacterSelectionSubsystem>())
+    {
+        TArray<UCharacterDataAsset*> AvailableCharacters = CharacterSubsystem->GetAvailableCharacters();
+        if (AvailableCharacters.Num() > 0)
+        {
+            // Return the first character as default
+            return AvailableCharacters[0];
+        }
+    }
+    
+    UE_LOG(LogTemp, Warning, TEXT("GetDefaultCharacter: No available characters found in subsystem"));
+    return nullptr;
+}
+
+bool AMultiplayerGameMode::ApplyDefaultCharacterIfNeeded(APlayerController* PlayerController)
+{
+    if (!PlayerController)
+    {
+        return false;
+    }
+
+    ACharacterPlayerState* PlayerState = PlayerController->GetPlayerState<ACharacterPlayerState>();
+    if (!PlayerState)
+    {
+        return false;
+    }
+
+    // Check if we already have a selection
+    if (PlayerState->HasSelectedCharacter())
+    {
+        return true;
+    }
+
+    // Get default character
+    UCharacterDataAsset* DefaultCharacter = GetDefaultCharacter();
+    if (!DefaultCharacter)
+    {
+        UE_LOG(LogTemp, Error, TEXT("ApplyDefaultCharacterIfNeeded: Could not get default character"));
+        return false;
+    }
+
+    // Apply the default character
+    FName DefaultCharacterID = DefaultCharacter->CharacterID;
+    PlayerState->Server_SetSelectedCharacterID(DefaultCharacterID);
+    
+    UE_LOG(LogTemp, Log, TEXT("ApplyDefaultCharacterIfNeeded: Applied default character %s for player %s"), 
+        *DefaultCharacterID.ToString(), *PlayerState->GetPlayerName());
+    
+    return true;
 }

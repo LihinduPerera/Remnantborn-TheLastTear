@@ -17,6 +17,7 @@ ALobbyGameMode::ALobbyGameMode()
     PlayerStateClass = ACharacterPlayerState::StaticClass();
     PlayerControllerClass = ALobbyPlayerController::StaticClass();
     GameStateClass = ALobbyGameState::StaticClass();
+    GameSessionClass = ARemnantbornGameSession::StaticClass();
 }
 
 void ALobbyGameMode::BeginPlay()
@@ -244,23 +245,38 @@ void ALobbyGameMode::StartMatchTravel()
         LobbyGS->SetLobbyLocked(true);
     }
 
-    // Ensure all player character selections are synchronized to PlayerState
-    for (auto& Pair : PlayerCharacterSelections)
+    // Get the GameSession to store character selections (persists through seamless travel)
+    ARemnantbornGameSession* RBGameSession = Cast<ARemnantbornGameSession>(this->GameSession);
+    if (RBGameSession)
     {
-        if (Pair.Key && Pair.Value)
+        UE_LOG(LogTemp, Log, TEXT("LobbyGameMode: Storing character selections in GameSession before travel"));
+        
+        // Store all player character selections in the GameSession
+        for (auto& Pair : PlayerCharacterSelections)
         {
-            ACharacterPlayerState* PlayerState = Pair.Key->GetPlayerState<ACharacterPlayerState>();
-            if (PlayerState)
+            if (Pair.Key && Pair.Value)
             {
-                PlayerState->SetSelectedCharacter(Pair.Value);
-                UE_LOG(LogTemp, Log, TEXT("Set character %s for player %s"), 
-                    *Pair.Value->CharacterName.ToString(), *PlayerState->GetPlayerName());
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("PlayerState not available for character synchronization"));
+                ACharacterPlayerState* PlayerState = Pair.Key->GetPlayerState<ACharacterPlayerState>();
+                if (PlayerState)
+                {
+                    int32 PlayerId = PlayerState->GetPlayerId();
+                    FName CharacterID = Pair.Value->CharacterID;
+                    
+                    // Store in GameSession - this persists through seamless travel
+                    RBGameSession->StorePlayerCharacterSelection(PlayerId, CharacterID);
+                    
+                    // Also set in PlayerState for immediate replication
+                    PlayerState->SetSelectedCharacter(Pair.Value);
+                    
+                    UE_LOG(LogTemp, Log, TEXT("LobbyGameMode: Stored character %s for player %s (ID: %d)"), 
+                        *CharacterID.ToString(), *PlayerState->GetPlayerName(), PlayerId);
+                }
             }
         }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("LobbyGameMode: GameSession is not ARemnantbornGameSession! Character selections may not persist."));
     }
 
     // Force replication of player state data and ensure character data is ready

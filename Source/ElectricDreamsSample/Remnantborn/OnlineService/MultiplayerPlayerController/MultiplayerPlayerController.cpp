@@ -33,22 +33,72 @@ void AMultiplayerPlayerController::OnRep_PlayerState()
 			SetupGASForPawn(GetPawn());
 		}
 		
-		// Check if we need to restore character selection from GameInstance
+		// Send character selection to server if needed
 		// This handles the case where PlayerState is cleared during seamless travel
-		ACharacterPlayerState* CharPlayerState = GetPlayerState<ACharacterPlayerState>();
-		if (CharPlayerState && !CharPlayerState->HasSelectedCharacter())
+		SendCharacterSelectionToServer();
+	}
+}
+
+void AMultiplayerPlayerController::SendCharacterSelectionToServer()
+{
+	ACharacterPlayerState* CharPlayerState = GetPlayerState<ACharacterPlayerState>();
+	if (!CharPlayerState)
+	{
+		return;
+	}
+	
+	// Only send if we don't already have a selection (server might have applied it from GameSession)
+	if (CharPlayerState->HasSelectedCharacter())
+	{
+		return;
+	}
+	
+	// Get character selection from GameInstance
+	UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+	if (!GameInstance)
+	{
+		return;
+	}
+	
+	FName LocalCharacterSelection = GameInstance->GetLocalCharacterSelection();
+	if (LocalCharacterSelection.IsNone())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SendCharacterSelectionToServer: No character selection in GameInstance"));
+		return;
+	}
+	
+	// Send to server via RPC
+	Server_NotifyCharacterSelection(LocalCharacterSelection);
+	UE_LOG(LogTemp, Log, TEXT("SendCharacterSelectionToServer: Notified server of character selection %s"), *LocalCharacterSelection.ToString());
+}
+
+bool AMultiplayerPlayerController::Server_NotifyCharacterSelection_Validate(FName CharacterID)
+{
+	return !CharacterID.IsNone();
+}
+
+void AMultiplayerPlayerController::Server_NotifyCharacterSelection_Implementation(FName CharacterID)
+{
+	if (CharacterID.IsNone())
+	{
+		return;
+	}
+	
+	// Apply the character selection to our PlayerState
+	ACharacterPlayerState* CharPlayerState = GetPlayerState<ACharacterPlayerState>();
+	if (CharPlayerState)
+	{
+		// Only apply if we don't already have a selection
+		if (!CharPlayerState->HasSelectedCharacter())
 		{
-			UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
-			if (GameInstance)
-			{
-				FName LocalCharacterSelection = GameInstance->GetLocalCharacterSelection();
-				if (!LocalCharacterSelection.IsNone())
-				{
-					// Restore character selection from GameInstance
-					CharPlayerState->Server_SetSelectedCharacterID(LocalCharacterSelection);
-					UE_LOG(LogTemp, Log, TEXT("Restored character selection %s from GameInstance"), *LocalCharacterSelection.ToString());
-				}
-			}
+			CharPlayerState->Server_SetSelectedCharacterID(CharacterID);
+			UE_LOG(LogTemp, Log, TEXT("Server_NotifyCharacterSelection: Applied character %s for player %s"), 
+				*CharacterID.ToString(), *CharPlayerState->GetPlayerName());
+		}
+		else
+		{
+			UE_LOG(LogTemp, Verbose, TEXT("Server_NotifyCharacterSelection: Player %s already has character %s selected"), 
+				*CharPlayerState->GetPlayerName(), *CharPlayerState->GetSelectedCharacterID().ToString());
 		}
 	}
 }
@@ -134,25 +184,7 @@ void AMultiplayerPlayerController::SetupGASForPawn(APawn* InPawn)
 	}
 
 	// Initialize ASC ActorInfo on both server and client
-	if (HasAuthority())
-	{
-		// Server initialization
-		ASC->InitAbilityActorInfo(RemnantbornCharacter, RemnantbornCharacter);
-		
-		// Grant abilities from character data if available
-		ACharacterPlayerState* CharPlayerState = GetPlayerState<ACharacterPlayerState>();
-		if (CharPlayerState && CharPlayerState->IsCharacterDataReady())
-		{
-			UCharacterDataAsset* SelectedCharacter = CharPlayerState->GetSelectedCharacter();
-			if (SelectedCharacter && SelectedCharacter->StartingAbilities.Num() > 0)
-			{
-				RemnantbornCharacter->GrantAbilities(SelectedCharacter->StartingAbilities);
-			}
-		}
-	}
-	else
-	{
-		// Client initialization - set up ASC for local prediction
-		ASC->InitAbilityActorInfo(RemnantbornCharacter, RemnantbornCharacter);
-	}
+	// Note: Abilities are granted by MultiplayerGameMode::SpawnPlayerWithCharacter
+	// to ensure they match the selected character
+	ASC->InitAbilityActorInfo(RemnantbornCharacter, RemnantbornCharacter);
 }

@@ -2,7 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "ElectricDreamsSample/Remnantborn/GameModes/RemnantbornGameSession.h"
 #include "MultiplayerGameMode.generated.h"
+
+class UCharacterDataAsset;
 
 UCLASS()
 class ELECTRICDREAMSSAMPLE_API AMultiplayerGameMode : public AGameModeBase
@@ -26,4 +29,29 @@ private:
 
     UFUNCTION()
     void RetrySpawnPlayerWithCharacter(APlayerController* PlayerController, int32 RetryCount);
+
+    /**
+     * Apply character selection from GameSession to PlayerState.
+     * This is called when a player joins to restore their lobby selection.
+     * 
+     * @param PlayerController - The player controller to apply selection for
+     * @return true if a selection was found and applied
+     */
+    bool ApplyCharacterSelectionFromGameSession(APlayerController* PlayerController);
+
+    /**
+     * Get the default character (first in the available characters list).
+     * Used when a player has no character selection.
+     * 
+     * @return The default character data asset, or nullptr if none available
+     */
+    UCharacterDataAsset* GetDefaultCharacter() const;
+
+    /**
+     * Apply the default character to a player if they have no selection.
+     * 
+     * @param PlayerController - The player controller to apply default for
+     * @return true if a default character was applied
+     */
+    bool ApplyDefaultCharacterIfNeeded(APlayerController* PlayerController);
 };

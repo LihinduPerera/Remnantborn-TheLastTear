@@ -79,17 +79,8 @@ void ARemnantbornCharacterBase::PossessedBy(AController* NewController)
 	{
 		AbilitySystemComponent->InitAbilityActorInfo(this, this);
 		
-		// Only grant starting abilities if no specific character data is available
-		// Character-specific abilities will be granted by GameMode
-		ACharacterPlayerState* CharPlayerState = GetPlayerState<ACharacterPlayerState>();
-		if (!CharPlayerState || !CharPlayerState->IsCharacterDataReady())
-		{
-			// Only grant abilities if there are any to grant
-			if (StartingAbilities.Num() > 0)
-			{
-				GrantAbilities(StartingAbilities);
-			}
-		}
+		// Note: Character-specific abilities are granted by MultiplayerGameMode::SpawnPlayerWithCharacter
+		// We don't grant abilities here to avoid conflicts with the GameMode's ability setup
 	}
 }
 
