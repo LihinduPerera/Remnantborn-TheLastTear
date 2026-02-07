@@ -1,9 +1,9 @@
 using UnrealBuildTool;
 
 [SupportedPlatforms("Win64")]
-public class ElectricDreamsSampleTargetRulesOverride : TargetRules
+public class RemnantbornTargetRulesOverride : TargetRules
 {
-    public ElectricDreamsSampleTargetRulesOverride(TargetInfo Target) : base(Target)
+    public RemnantbornTargetRulesOverride(TargetInfo Target) : base(Target)
     {
         // Override settings for packaging
         if (Target.Type == TargetType.Game || Target.Type == TargetType.Editor)
