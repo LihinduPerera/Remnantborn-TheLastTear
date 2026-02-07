@@ -42,8 +42,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Lobby")
     void LeaveLobby();
 
-    UFUNCTION(BlueprintCallable, Category = "Lobby")
-    void ShowCharacterSelection();
+    
 
 protected:
     UFUNCTION()
@@ -89,8 +88,7 @@ protected:
     UPROPERTY(meta = (BindWidget))
     class UButton* Set4PlayersButton;
 
-    UPROPERTY(meta = (BindWidget))
-    class UButton* SelectCharacterButton;
+    
 
     UPROPERTY(meta = (BindWidget))
     class UHorizontalBox* HostControlsContainer;

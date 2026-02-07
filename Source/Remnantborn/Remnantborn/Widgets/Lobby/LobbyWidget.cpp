@@ -44,10 +44,7 @@ void ULobbyWidget::NativeConstruct()
         Set4PlayersButton->OnClicked.AddDynamic(this, &ULobbyWidget::OnSet4PlayersClicked);
     }
 
-    if (SelectCharacterButton)
-    {
-        SelectCharacterButton->OnClicked.AddDynamic(this, &ULobbyWidget::ShowCharacterSelection);
-    }
+
 
     ALobbyGameState* LobbyGS = GetLobbyGameState();
     if (LobbyGS)
@@ -176,14 +173,7 @@ void ULobbyWidget::LeaveLobby()
     }
 }
 
-void ULobbyWidget::ShowCharacterSelection()
-{
-    ALobbyPlayerController* LobbyPC = GetLobbyPlayerController();
-    if (LobbyPC)
-    {
-        LobbyPC->Client_ShowCharacterSelection();
-    }
-}
+
 
 void ULobbyWidget::HandleLobbyStateChanged()
 {
@@ -262,12 +252,7 @@ void ULobbyWidget::UpdateUI()
         CancelButton->SetIsEnabled(LobbyGS->bCountdownActive);
     }
 
-    if (SelectCharacterButton)
-    {
-        ACharacterPlayerState* PS = LobbyPC->GetPlayerState<ACharacterPlayerState>();
-        bool bHasCharacter = PS && PS->GetSelectedCharacter() != nullptr;
-        SelectCharacterButton->SetIsEnabled(!bHasCharacter && !LobbyGS->bCountdownActive);
-    }
+
 
     if (StatusText)
     {

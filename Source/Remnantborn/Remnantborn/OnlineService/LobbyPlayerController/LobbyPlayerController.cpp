@@ -23,6 +23,10 @@ void ALobbyPlayerController::BeginPlay()
         FTimerDelegate WidgetDelegate;
         WidgetDelegate.BindUFunction(this, "CreateLobbyWidget");
         GetWorld()->GetTimerManager().SetTimer(WidgetTimer, WidgetDelegate, 0.5f, false);
+        
+        // Check if player has a character selected, if not show character selection
+        FTimerHandle CharacterCheckTimer;
+        GetWorld()->GetTimerManager().SetTimer(CharacterCheckTimer, this, &ALobbyPlayerController::CheckAndShowCharacterSelection, 1.0f, false);
     }
 }
 
@@ -131,6 +135,17 @@ void ALobbyPlayerController::SetupInputMode()
     SetShowMouseCursor(true);
     bEnableClickEvents = true;
     bEnableMouseOverEvents = true;
+}
+
+void ALobbyPlayerController::CheckAndShowCharacterSelection()
+{
+    // Check if player has already selected a character
+    ACharacterPlayerState* PS = GetPlayerState<ACharacterPlayerState>();
+    if (!PS || !PS->GetSelectedCharacter())
+    {
+        // Player doesn't have a character selected, show character selection
+        ShowCharacterSelection();
+    }
 }
 
 bool ALobbyPlayerController::IsHost() const

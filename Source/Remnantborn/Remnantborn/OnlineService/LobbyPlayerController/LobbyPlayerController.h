@@ -87,6 +87,7 @@ protected:
 
 private:
     void SetupInputMode();
+    void CheckAndShowCharacterSelection();
 
     UFUNCTION(Server, Reliable, WithValidation)
     void Server_SetPlayerReady(bool bReady);
