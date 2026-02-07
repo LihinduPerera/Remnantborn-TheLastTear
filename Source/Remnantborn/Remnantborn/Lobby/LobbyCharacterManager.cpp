@@ -243,7 +243,8 @@ void ULobbyCharacterManager::ConfigureCharacterForLobby(ARemnantbornCharacterBas
     if (Character->GetMesh())
     {
         Character->GetMesh()->SetVisibility(true);
-        Character->GetMesh()->SetRelativeRotation(FRotator(0.f, 0.f, 0.f));
+        // Don't override the mesh rotation - let the spawn point transform handle it
+        // Character->GetMesh()->SetRelativeRotation(FRotator(0.f, 0.f, 0.f));
     }
 
     Character->SetActorTickEnabled(false);
