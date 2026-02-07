@@ -250,6 +250,9 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
                     TArray<FGameplayAbilitySpecHandle> GrantedHandles = CharacterBase->GrantAbilities(SelectedCharacter->StartingAbilities);
                     UE_LOG(LogTemp, Log, TEXT("SpawnPlayerWithCharacter: Granted %d abilities for character %s"), 
                         GrantedHandles.Num(), *SelectedCharacter->CharacterName.ToString());
+                    
+                    // Notify character that abilities are ready for UI setup
+                    CharacterBase->OnAbilitiesGrantedAndReady();
                 }
                 else
                 {

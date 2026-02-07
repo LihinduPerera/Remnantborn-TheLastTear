@@ -1,6 +1,7 @@
 #include "RemnantbornCharacterBase.h"
 
 #include "Components/CapsuleComponent.h"
+#include "Blueprint/UserWidget.h"
 #include "Remnantborn/Remnantborn/GameplayAbilitySystem/AttributeSets/BasicAttributeSet.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterPlayerState.h"
@@ -178,5 +179,44 @@ void ARemnantbornCharacterBase::OnDeadTagChanged(
 	if (NewCount > 0)
 	{
 		HandleDeath();
+	}
+}
+
+void ARemnantbornCharacterBase::OnAbilitiesGrantedAndReady()
+{
+	// Call Blueprint event
+	OnCharacterReadyForUI();
+	
+	// Notify all clients that their character is ready for UI
+	if (GetLocalRole() == ROLE_Authority)
+	{
+		Client_OnCharacterReadyForUI();
+	}
+	else
+	{
+		// For clients, directly set up the UI
+		SetupPlayerHUD();
+	}
+}
+
+void ARemnantbornCharacterBase::Client_OnCharacterReadyForUI_Implementation()
+{
+	SetupPlayerHUD();
+}
+
+void ARemnantbornCharacterBase::SetupPlayerHUD()
+{
+	// Only create HUD on locally controlled characters
+	if (IsLocallyControlled() && PlayerVitalsWidgetClass && !PlayerVitalsWidget)
+	{
+		APlayerController* PC = Cast<APlayerController>(GetController());
+		if (PC)
+		{
+			PlayerVitalsWidget = CreateWidget<UUserWidget>(PC, PlayerVitalsWidgetClass);
+			if (PlayerVitalsWidget)
+			{
+				PlayerVitalsWidget->AddToViewport();
+			}
+		}
 	}
 }

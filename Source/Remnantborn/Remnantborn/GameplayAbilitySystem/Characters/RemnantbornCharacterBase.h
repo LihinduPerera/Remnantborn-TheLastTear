@@ -64,4 +64,24 @@ public:
 	
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "AbilitySystem")
 	void ServerSendGameplayEventToSelf(FGameplayEventData EventData);
+
+	// HUD Widget
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
+	TSubclassOf<class UUserWidget> PlayerVitalsWidgetClass;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
+	class UUserWidget* PlayerVitalsWidget;
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
+	void OnCharacterReadyForUI();
+
+	// Called when abilities are granted and character is ready for UI
+	virtual void OnAbilitiesGrantedAndReady();
+
+	// Client RPC to notify when character is ready for UI
+	UFUNCTION(Client, Reliable)
+	void Client_OnCharacterReadyForUI();
+
+	// Helper function to set up player HUD
+	void SetupPlayerHUD();
 };
