@@ -11,6 +11,7 @@
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterPlayerState.h"
 #include "Remnantborn/Remnantborn/OnlineService/LobbyPlayerController/LobbyPlayerController.h"
 #include "Remnantborn/Remnantborn/GameModes/LobbyGameState.h"
+#include "Remnantborn/Remnantborn/Lobby/LobbyCharacterManager.h"
 
 ALobbyGameMode::ALobbyGameMode()
 {
@@ -23,6 +24,8 @@ ALobbyGameMode::ALobbyGameMode()
 void ALobbyGameMode::BeginPlay()
 {
     Super::BeginPlay();
+
+    InitializeCharacterManager();
 
     UCharacterSelectionSubsystem* CharacterSubsystem = GetGameInstance()->GetSubsystem<UCharacterSelectionSubsystem>();
     if (CharacterSubsystem)
@@ -59,6 +62,9 @@ void ALobbyGameMode::Logout(AController* Exiting)
     if (PC)
     {
         PlayerCharacterSelections.Remove(PC);
+
+        // Remove lobby character when player leaves
+        DespawnLobbyCharacterForPlayer(PC);
 
         if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
         {
@@ -102,6 +108,9 @@ void ALobbyGameMode::OnPlayerSelectedCharacter(APlayerController* PlayerControll
     if (PlayerController && SelectedCharacter)
     {
         PlayerCharacterSelections.Add(PlayerController, SelectedCharacter);
+
+        // Spawn or update the 3D character in lobby
+        SpawnLobbyCharacterForPlayer(PlayerController);
 
         if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
         {
@@ -239,6 +248,9 @@ void ALobbyGameMode::StartMatchTravel()
         return;
     }
 
+    // Clear all lobby characters before match starts
+    ClearAllLobbyCharacters();
+
     // Lock the lobby to prevent new players from joining
     if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
     {
@@ -357,6 +369,58 @@ void ALobbyGameMode::UpdateGameState()
     if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
     {
         LobbyGS->NotifyStateChanged();
+    }
+}
+
+void ALobbyGameMode::SpawnLobbyCharacterForPlayer(APlayerController* PlayerController)
+{
+    if (!CharacterManager)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("LobbyGameMode: CharacterManager not initialized"));
+        return;
+    }
+
+    UCharacterDataAsset* SelectedCharacter = GetPlayerSelectedCharacter(PlayerController);
+    if (SelectedCharacter)
+    {
+        CharacterManager->SpawnCharacterForPlayer(PlayerController, SelectedCharacter);
+    }
+}
+
+void ALobbyGameMode::DespawnLobbyCharacterForPlayer(APlayerController* PlayerController)
+{
+    if (CharacterManager)
+    {
+        CharacterManager->DespawnCharacterForPlayer(PlayerController);
+    }
+}
+
+void ALobbyGameMode::ClearAllLobbyCharacters()
+{
+    if (CharacterManager)
+    {
+        CharacterManager->ClearAllCharacters();
+    }
+}
+
+void ALobbyGameMode::InitializeCharacterManager()
+{
+    if (!CharacterManager)
+    {
+        CharacterManager = NewObject<ULobbyCharacterManager>(this);
+        if (CharacterManager)
+        {
+            CharacterManager->Initialize();
+            CharacterManager->SetMaxPlayers(MaxPlayers);
+            
+            // Set character manager reference in GameState
+            if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
+            {
+                LobbyGS->SetCharacterManager(CharacterManager);
+            }
+            
+            UE_LOG(LogTemp, Log, TEXT("LobbyGameMode: CharacterManager initialized"));
+        }
     }
 }
 

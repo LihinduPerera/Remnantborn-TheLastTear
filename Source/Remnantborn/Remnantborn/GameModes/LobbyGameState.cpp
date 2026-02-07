@@ -132,6 +132,24 @@ void ALobbyGameState::OnRep_LobbyLocked()
     OnLobbyStateChanged.Broadcast();
 }
 
+TArray<FLobbyCharacterInfo> ALobbyGameState::GetLobbyCharacters() const
+{
+    if (CharacterManager)
+    {
+        return CharacterManager->GetAllSpawnedCharacters();
+    }
+    return TArray<FLobbyCharacterInfo>();
+}
+
+int32 ALobbyGameState::GetSpawnedCharacterCount() const
+{
+    if (CharacterManager)
+    {
+        return CharacterManager->GetAllSpawnedCharacters().Num();
+    }
+    return 0;
+}
+
 void ALobbyGameState::NotifyStateChanged()
 {
     OnLobbyStateChanged.Broadcast();

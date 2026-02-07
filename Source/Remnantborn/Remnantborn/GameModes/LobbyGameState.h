@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
+#include "Remnantborn/Remnantborn/Lobby/LobbyCharacterManager.h"
 #include "LobbyGameState.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnLobbyStateChanged);
@@ -66,6 +67,13 @@ public:
     void SetCountdownState(bool bActive, int32 Time);
     void SetLobbyLocked(bool bLocked);
 
+    // Lobby character display tracking
+    UFUNCTION(BlueprintCallable, Category = "Lobby Characters")
+    TArray<FLobbyCharacterInfo> GetLobbyCharacters() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Lobby Characters")
+    int32 GetSpawnedCharacterCount() const;
+
 protected:
     UFUNCTION()
     void OnRep_MaxPlayers();
@@ -85,6 +93,12 @@ protected:
     UFUNCTION()
     void OnRep_LobbyLocked();
 
+private:
+    // Reference to character manager (set by GameMode)
+    UPROPERTY()
+    class ULobbyCharacterManager* CharacterManager;
+
 public:
     void NotifyStateChanged();
+    void SetCharacterManager(class ULobbyCharacterManager* Manager) { CharacterManager = Manager; }
 };

@@ -125,6 +125,16 @@ void ACharacterPlayerState::RetryCacheCharacterData(int32 RetryCount)
     }
 }
 
+ARemnantbornCharacterBase* ACharacterPlayerState::GetLobbyCharacterInstance() const
+{
+    return LobbyCharacterInstance;
+}
+
+void ACharacterPlayerState::SetLobbyCharacterInstance(ARemnantbornCharacterBase* Character)
+{
+    LobbyCharacterInstance = Character;
+}
+
 void ACharacterPlayerState::CacheCharacterData()
 {
     if (GetWorld() && GetWorld()->GetGameInstance())

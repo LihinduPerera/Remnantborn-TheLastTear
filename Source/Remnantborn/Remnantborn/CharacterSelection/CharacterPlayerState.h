@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
 #include "CharacterDataAsset.h"
+#include "Remnantborn/Remnantborn/Lobby/LobbyCharacterManager.h"
 #include "CharacterPlayerState.generated.h"
 
 UCLASS()
@@ -36,6 +37,16 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Character Selection")
     bool IsCharacterDataReady() const { return CachedCharacterData != nullptr; }
 
+    // Lobby character instance tracking
+    UFUNCTION(BlueprintCallable, Category = "Lobby Character")
+    class ARemnantbornCharacterBase* GetLobbyCharacterInstance() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Lobby Character")
+    void SetLobbyCharacterInstance(class ARemnantbornCharacterBase* Character);
+
+    UFUNCTION(BlueprintPure, Category = "Lobby Character")
+    bool HasLobbyCharacterInstance() const { return LobbyCharacterInstance != nullptr; }
+
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
     
     virtual void BeginPlay() override;
@@ -50,6 +61,10 @@ private:
 
     UPROPERTY()
     UCharacterDataAsset* CachedCharacterData;
+
+    // Reference to the lobby character instance
+    UPROPERTY()
+    class ARemnantbornCharacterBase* LobbyCharacterInstance;
 
     void CacheCharacterData();
     

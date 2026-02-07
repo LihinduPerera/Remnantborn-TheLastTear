@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterDataAsset.h"
 #include "Remnantborn/Remnantborn/GameModes/RemnantbornGameSession.h"
+#include "Remnantborn/Remnantborn/Lobby/LobbyCharacterManager.h"
 #include "GameFramework/GameModeBase.h"
 #include "LobbyGameMode.generated.h"
 
@@ -56,6 +57,16 @@ public:
     UFUNCTION(BlueprintPure, Category = "Character Selection")
     UCharacterDataAsset* GetPlayerSelectedCharacter(APlayerController* PlayerController) const;
 
+    // Lobby character display management
+    UFUNCTION(BlueprintCallable, Category = "Lobby Characters")
+    void SpawnLobbyCharacterForPlayer(APlayerController* PlayerController);
+
+    UFUNCTION(BlueprintCallable, Category = "Lobby Characters")
+    void DespawnLobbyCharacterForPlayer(APlayerController* PlayerController);
+
+    UFUNCTION(BlueprintCallable, Category = "Lobby Characters")
+    void ClearAllLobbyCharacters();
+
 protected:
     UFUNCTION()
     void UpdateCountdown();
@@ -88,5 +99,10 @@ private:
     // Character selections per player
     TMap<APlayerController*, UCharacterDataAsset*> PlayerCharacterSelections;
 
+    // Lobby character manager for 3D character display
+    UPROPERTY()
+    class ULobbyCharacterManager* CharacterManager;
+
     void UpdateGameState();
+    void InitializeCharacterManager();
 };
