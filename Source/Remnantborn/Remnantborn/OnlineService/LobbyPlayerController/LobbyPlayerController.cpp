@@ -226,10 +226,24 @@ void ALobbyPlayerController::OnRep_IsReady()
 
 void ALobbyPlayerController::OnRep_HasSelectedCharacter()
 {
+    UE_LOG(LogTemp, Warning, TEXT("OnRep_HasSelectedCharacter called: bHasSelectedCharacter = %s"), bHasSelectedCharacter ? TEXT("true") : TEXT("false"));
     if (LobbyWidget)
     {
         LobbyWidget->UpdateUI();
+        UE_LOG(LogTemp, Warning, TEXT("OnRep_HasSelectedCharacter: LobbyWidget updated"));
     }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("OnRep_HasSelectedCharacter: LobbyWidget is null"));
+    }
+}
+
+void ALobbyPlayerController::Client_CharacterSelectionConfirmed_Implementation()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Client_CharacterSelectionConfirmed called on client"));
+    bHasSelectedCharacter = true;
+    OnRep_HasSelectedCharacter();
+    UE_LOG(LogTemp, Warning, TEXT("Client_CharacterSelectionConfirmed: bHasSelectedCharacter set to %s"), bHasSelectedCharacter ? TEXT("true") : TEXT("false"));
 }
 
 void ALobbyPlayerController::StartMatchCountdown()
@@ -322,9 +336,14 @@ void ALobbyPlayerController::Server_ConfirmCharacterSelection_Implementation(FNa
                 UCharacterDataAsset* CharacterData = Subsystem->GetCharacterByID(CharacterID);
                 if (CharacterData)
                 {
-                    PS->SetSelectedCharacter(CharacterData);
+PS->SetSelectedCharacter(CharacterData);
                     bHasSelectedCharacter = true;
-                    OnRep_HasSelectedCharacter();
+                    
+                    // Force replication update
+                    ForceNetUpdate();
+                    
+                    // Notify the client that their character selection has been confirmed
+                    Client_CharacterSelectionConfirmed();
 
                     // Store character selection in GameInstance for persistence during travel
                     if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))

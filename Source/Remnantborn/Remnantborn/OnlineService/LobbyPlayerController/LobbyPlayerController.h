@@ -59,6 +59,9 @@ protected:
     UPROPERTY(ReplicatedUsing = OnRep_HasSelectedCharacter)
     bool bHasSelectedCharacter = false;
 
+    UFUNCTION(Client, Reliable, Category = "Lobby")
+    void Client_CharacterSelectionConfirmed();
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lobby")
     TSubclassOf<class ULobbyWidget> LobbyWidgetClass;
 

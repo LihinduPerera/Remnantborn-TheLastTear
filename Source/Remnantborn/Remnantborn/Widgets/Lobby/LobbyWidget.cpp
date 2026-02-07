@@ -328,15 +328,21 @@ void ULobbyWidget::UpdateReadyButton()
         return;
     }
 
-    ACharacterPlayerState* PS = LobbyPC->GetPlayerState<ACharacterPlayerState>();
-    bool bHasCharacter = PS && PS->GetSelectedCharacter() != nullptr;
+    // Check the replicated variable instead of PlayerState
+    bool bHasCharacter = LobbyPC->HasSelectedCharacter();
+
+    UE_LOG(LogTemp, Warning, TEXT("UpdateReadyButton: bHasCharacter = %s, bIsReady = %s"), 
+        bHasCharacter ? TEXT("true") : TEXT("false"), 
+        LobbyPC->IsReady() ? TEXT("true") : TEXT("false"));
 
     if (bHasCharacter)
     {
         ReadyButton->SetIsEnabled(true);
+        UE_LOG(LogTemp, Warning, TEXT("UpdateReadyButton: Ready button enabled"));
     }
     else
     {
         ReadyButton->SetIsEnabled(false);
+        UE_LOG(LogTemp, Warning, TEXT("UpdateReadyButton: Ready button disabled"));
     }
 }
