@@ -171,6 +171,9 @@ void ARemnantbornCharacterBase::HandleDeath_Implementation()
 	Impulse.Z = 15000.f;
 
 	GetMesh()->AddImpulseAtLocation(Impulse, GetActorLocation());
+
+	// Note: Game mode integration for player death tracking will be handled elsewhere
+    // The existing death mechanics (physics, movement disable) are preserved
 }
 
 void ARemnantbornCharacterBase::OnDeadTagChanged(

@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Remnantborn/Remnantborn/Widgets/MatchResults/MatchResultsWidget.h"
+#include "Remnantborn/Remnantborn/GameModes/MultiplayerMatchGameState.h"
 #include "MultiplayerPlayerController.generated.h"
 
 UCLASS()
@@ -18,8 +20,14 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_SetupGameplayInput();
 
-	UFUNCTION(Client, Reliable)
+UFUNCTION(Client, Reliable)
 	void Client_InitializeHUD();
+
+	UFUNCTION(Client, Reliable)
+	void Client_ShowMatchResults();
+
+	UFUNCTION(Client, Reliable)
+	void Client_HideMatchResults();
 
 	/**
 	 * Server RPC for clients to notify the server of their character selection.
@@ -40,4 +48,12 @@ private:
 	 * Called from OnRep_PlayerState when PlayerState first replicates.
 	 */
 	void SendCharacterSelectionToServer();
+
+	// Match results widget
+	UPROPERTY()
+	UMatchResultsWidget* MatchResultsWidget;
+
+	// Match results widget class
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UMatchResultsWidget> MatchResultsWidgetClass;
 };

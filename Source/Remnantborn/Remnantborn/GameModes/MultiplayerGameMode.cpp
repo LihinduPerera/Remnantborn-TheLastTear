@@ -1,16 +1,17 @@
 #include "MultiplayerGameMode.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/GameStateBase.h"
+#include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
+#include "GameFramework/PlayerStart.h"
+#include "AbilitySystemComponent.h"
+#include "GameplayTagContainer.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterPlayerState.h"
 #include "Remnantborn/Remnantborn/GameplayAbilitySystem/Characters/RemnantbornCharacterBase.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterDataAsset.h"
 #include "Remnantborn/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 #include "Remnantborn/Remnantborn/OnlineService/MultiplayerPlayerController/MultiplayerPlayerController.h"
-#include "Engine/World.h"
-#include "Kismet/GameplayStatics.h"
-#include "GameFramework/PlayerStart.h"
-#include "AbilitySystemComponent.h"
 
 AMultiplayerGameMode::AMultiplayerGameMode()
 {
@@ -19,6 +20,9 @@ AMultiplayerGameMode::AMultiplayerGameMode()
     
     // Set game session class - this persists through seamless travel
     GameSessionClass = ARemnantbornGameSession::StaticClass();
+    
+    // Set game state class for match tracking
+    GameStateClass = AMultiplayerMatchGameState::StaticClass();
     
 	// Default pawn class - will be overridden by character selection
 	static ConstructorHelpers::FClassFinder<APawn> PlayerPawnBPClass(TEXT("/Game/Remnantborn/Blueprints/GameplayAbilitySystem/Characters/BP_RemnantbornCharacterBase"));
@@ -32,8 +36,19 @@ void AMultiplayerGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Don't spawn characters here - let PostLogin handle it properly
-	// This prevents double spawning and GAS initialization issues
+	// Initialize match tracking after a short delay to ensure all players are loaded
+	FTimerHandle InitTimer;
+	FTimerDelegate InitDelegate;
+	InitDelegate.BindUFunction(this, "InitializeMatchTracking");
+	GetWorld()->GetTimerManager().SetTimer(InitTimer, InitDelegate, 2.0f, false);
+}
+
+void AMultiplayerGameMode::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	// Check for player deaths periodically
+	CheckForPlayerDeaths();
 }
 
 void AMultiplayerGameMode::PostSeamlessTravel()
@@ -483,7 +498,7 @@ bool AMultiplayerGameMode::ApplyDefaultCharacterIfNeeded(APlayerController* Play
         return false;
     }
 
-    // Apply the default character
+// Apply the default character
     FName DefaultCharacterID = DefaultCharacter->CharacterID;
     PlayerState->Server_SetSelectedCharacterID(DefaultCharacterID);
     
@@ -491,4 +506,132 @@ bool AMultiplayerGameMode::ApplyDefaultCharacterIfNeeded(APlayerController* Play
         *DefaultCharacterID.ToString(), *PlayerState->GetPlayerName());
     
     return true;
+}
+
+void AMultiplayerGameMode::InitializeMatchTracking()
+{
+    AMultiplayerMatchGameState* MatchGameState = GetGameState<AMultiplayerMatchGameState>();
+    if (MatchGameState)
+    {
+        MatchGameState->InitializePlayerResults();
+        UE_LOG(LogTemp, Log, TEXT("MultiplayerGameMode: Match tracking initialized for %d players"), 
+            MatchGameState->PlayerResults.Num());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("MultiplayerGameMode: Failed to get MultiplayerMatchGameState"));
+    }
+}
+
+void AMultiplayerGameMode::OnPlayerDied(APlayerController* PlayerController)
+{
+    NotifyPlayerDied(PlayerController);
+}
+
+void AMultiplayerGameMode::NotifyPlayerDied(APlayerController* PlayerController)
+{
+    if (!PlayerController)
+    {
+        return;
+    }
+
+    AMultiplayerMatchGameState* MatchGameState = GetGameState<AMultiplayerMatchGameState>();
+    if (!MatchGameState)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("MultiplayerGameMode: No match game state available for player death tracking"));
+        return;
+    }
+
+    ACharacterPlayerState* PlayerState = PlayerController->GetPlayerState<ACharacterPlayerState>();
+    if (!PlayerState)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("MultiplayerGameMode: No player state for dead player"));
+        return;
+    }
+
+    FString PlayerName = PlayerState->GetPlayerName();
+    int32 PlayerId = PlayerState->GetPlayerId();
+
+    UE_LOG(LogTemp, Log, TEXT("MultiplayerGameMode: Player %s died, notifying match state"), *PlayerName);
+    
+    // Notify the game state about the player death
+    MatchGameState->OnPlayerDeath(PlayerName, PlayerId);
+
+    // Check if match is finished and show results to all players
+    if (MatchGameState->IsMatchFinished())
+    {
+        UE_LOG(LogTemp, Log, TEXT("MultiplayerGameMode: Match finished, showing results to all players"));
+        
+        // Show match results to all players
+        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+        {
+            if (AMultiplayerPlayerController* PC = Cast<AMultiplayerPlayerController>(It->Get()))
+            {
+                PC->Client_ShowMatchResults();
+            }
+        }
+    }
+}
+
+void AMultiplayerGameMode::CheckForPlayerDeaths()
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    AMultiplayerMatchGameState* MatchGameState = GetGameState<AMultiplayerMatchGameState>();
+    if (!MatchGameState || MatchGameState->IsMatchFinished())
+    {
+        return;
+    }
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+
+    // Check all player controllers for dead characters
+    for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+    {
+        APlayerController* PC = It->Get();
+        if (!PC)
+        {
+            continue;
+        }
+
+        // Get the character pawn
+        APawn* Pawn = PC->GetPawn();
+        if (!Pawn)
+        {
+            continue;
+        }
+
+        // Check if this is a Remnantborn character
+        ARemnantbornCharacterBase* Character = Cast<ARemnantbornCharacterBase>(Pawn);
+        if (!Character)
+        {
+            continue;
+        }
+
+        // Check if character has the death tag
+        if (UAbilitySystemComponent* ASC = Character->GetAbilitySystemComponent())
+        {
+            static FGameplayTag DeathTag = FGameplayTag::RequestGameplayTag("State.Dead");
+            if (ASC->HasMatchingGameplayTag(DeathTag))
+            {
+                // Check if we've already recorded this death
+                ACharacterPlayerState* PlayerState = PC->GetPlayerState<ACharacterPlayerState>();
+                if (PlayerState)
+                {
+                    FPlayerMatchResult ExistingResult = MatchGameState->GetPlayerResult(PlayerState->GetPlayerName());
+                    if (ExistingResult.bIsAlive) // Still marked as alive, so this is a new death
+                    {
+                        NotifyPlayerDied(PC);
+                    }
+                }
+            }
+        }
+    }
 }

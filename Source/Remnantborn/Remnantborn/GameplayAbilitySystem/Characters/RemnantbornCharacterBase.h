@@ -8,6 +8,8 @@
 #include "AbilitySystemComponent.h"
 #include "RemnantbornCharacterBase.generated.h"
 
+class AMultiplayerGameMode;
+
 UCLASS()
 class REMNANTBORN_API ARemnantbornCharacterBase : public ACharacter, public IAbilitySystemInterface
 {

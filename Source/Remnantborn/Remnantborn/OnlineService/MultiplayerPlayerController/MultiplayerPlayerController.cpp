@@ -157,9 +157,16 @@ void AMultiplayerPlayerController::InitializeHUD()
 		return;
 	}
 
-	// Note: HUDClass should be set in the GameMode or PlayerController blueprint
-	// This is a placeholder for HUD initialization logic
-	// In your implementation, you would create your specific HUD widget here
+	// Create match results widget if class is set
+	if (MatchResultsWidgetClass && !MatchResultsWidget)
+	{
+		MatchResultsWidget = CreateWidget<UMatchResultsWidget>(this, MatchResultsWidgetClass);
+		if (MatchResultsWidget)
+		{
+			MatchResultsWidget->AddToViewport();
+			UE_LOG(LogTemp, Log, TEXT("MultiplayerPlayerController: Match results widget created and added to viewport"));
+		}
+	}
 	
 	UE_LOG(LogTemp, Log, TEXT("HUD initialization called for local player"));
 }
@@ -183,8 +190,36 @@ void AMultiplayerPlayerController::SetupGASForPawn(APawn* InPawn)
 		return;
 	}
 
-	// Initialize ASC ActorInfo on both server and client
+// Initialize ASC ActorInfo on both server and client
 	// Note: Abilities are granted by MultiplayerGameMode::SpawnPlayerWithCharacter
 	// to ensure they match the selected character
 	ASC->InitAbilityActorInfo(RemnantbornCharacter, RemnantbornCharacter);
+}
+
+void AMultiplayerPlayerController::Client_ShowMatchResults_Implementation()
+{
+	if (MatchResultsWidget)
+	{
+		MatchResultsWidget->SetVisibility(ESlateVisibility::Visible);
+		
+		// Set UI input mode for interaction
+		FInputModeUIOnly InputMode;
+		SetInputMode(InputMode);
+		bShowMouseCursor = true;
+		
+		UE_LOG(LogTemp, Log, TEXT("MultiplayerPlayerController: Match results shown"));
+	}
+}
+
+void AMultiplayerPlayerController::Client_HideMatchResults_Implementation()
+{
+	if (MatchResultsWidget)
+	{
+		MatchResultsWidget->SetVisibility(ESlateVisibility::Hidden);
+		
+		// Return to game input mode
+		SetupInputMode();
+		
+		UE_LOG(LogTemp, Log, TEXT("MultiplayerPlayerController: Match results hidden"));
+	}
 }

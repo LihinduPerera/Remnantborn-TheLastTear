@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "Remnantborn/Remnantborn/GameModes/RemnantbornGameSession.h"
+#include "Remnantborn/Remnantborn/GameModes/MultiplayerMatchGameState.h"
 #include "MultiplayerGameMode.generated.h"
 
 class UCharacterDataAsset;
@@ -20,7 +21,25 @@ protected:
     virtual void PostLogin(APlayerController* NewPlayer) override;
     virtual void Logout(AController* Exiting) override;
     virtual void PostSeamlessTravel() override;
-    
+    virtual void Tick(float DeltaTime) override;
+
+    /**
+     * Initialize match tracking when all players are ready
+     */
+    void InitializeMatchTracking();
+
+    /**
+     * Check for player deaths and update match state
+     */
+    void CheckForPlayerDeaths();
+
+public:
+	/**
+	 * Public method for external systems to notify about player death
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Match")
+	void NotifyPlayerDied(APlayerController* PlayerController);
+
 private:
 	void SetupPlayerInput(APlayerController* PlayerController);
     
@@ -29,6 +48,11 @@ private:
 
     UFUNCTION()
     void RetrySpawnPlayerWithCharacter(APlayerController* PlayerController, int32 RetryCount);
+
+    /**
+     * Handle player death and notify game state
+     */
+    void OnPlayerDied(APlayerController* PlayerController);
 
     /**
      * Apply character selection from GameSession to PlayerState.
