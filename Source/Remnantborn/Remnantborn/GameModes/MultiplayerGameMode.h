@@ -26,6 +26,7 @@ protected:
     /**
      * Initialize match tracking when all players are ready
      */
+    UFUNCTION()
     void InitializeMatchTracking();
 
     /**
