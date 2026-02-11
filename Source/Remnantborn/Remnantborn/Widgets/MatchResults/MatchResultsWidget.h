@@ -40,6 +40,17 @@ protected:
     UPROPERTY(meta = (BindWidget))
     UTextBlock* WinnerText;
 
+    // Personal result text (Victory/Defeat for local player)
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* PersonalResultText;
+
+    // Result overlay containers
+    UPROPERTY(meta = (BindWidget))
+    UWidget* VictoryOverlay;
+
+    UPROPERTY(meta = (BindWidget))
+    UWidget* DefeatOverlay;
+
     // Results container
     UPROPERTY(meta = (BindWidget))
     UScrollBox* ResultsScrollBox;
@@ -71,6 +82,12 @@ private:
 
     // Helper function to create player result entry
     void CreatePlayerResultEntry(const FPlayerMatchResult& PlayerResult, int32 Rank);
+
+    // Update the personal result display (Victory/Defeat)
+    void UpdatePersonalResultDisplay(bool bIsWinner);
+
+    // Check if local player is the winner
+    bool IsLocalPlayerWinner() const;
 
     // Reference to game state for data binding
     UPROPERTY()

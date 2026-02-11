@@ -5,6 +5,7 @@
 #include "Components/ScrollBox.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 #include "GameFramework/GameModeBase.h"
 
 void UMatchResultsWidget::NativeConstruct()
@@ -102,13 +103,30 @@ void UMatchResultsWidget::UpdateResultsDisplay()
     // Clear existing results
     PlayerResultsBox->ClearChildren();
 
-    // Set title
-    TitleText->SetText(FText::FromString(TEXT("Match Complete!")));
+    // Check if local player is the winner
+    const bool bLocalPlayerIsWinner = IsLocalPlayerWinner();
 
-    // Set winner text
+    // Update personal result display (Victory/Defeat)
+    UpdatePersonalResultDisplay(bLocalPlayerIsWinner);
+
+    // Set title based on result
+    if (bLocalPlayerIsWinner)
+    {
+        TitleText->SetText(FText::FromString(TEXT("VICTORY!")));
+    }
+    else
+    {
+        TitleText->SetText(FText::FromString(TEXT("DEFEAT")));
+    }
+
+    // Set winner text (showing who won)
     if (MatchGameState->WinnerName == TEXT("Draw"))
     {
-        WinnerText->SetText(FText::FromString(TEXT("It's a Draw!")));
+        WinnerText->SetText(FText::FromString(TEXT("Match ended in a Draw!")));
+    }
+    else if (bLocalPlayerIsWinner)
+    {
+        WinnerText->SetText(FText::FromString(TEXT("You are the last survivor!")));
     }
     else
     {
@@ -124,7 +142,65 @@ void UMatchResultsWidget::UpdateResultsDisplay()
         CreatePlayerResultEntry(RankedResults[i], i + 1);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Updated display for %d players"), RankedResults.Num());
+    UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Updated display for %d players. Local player winner: %s"), 
+        RankedResults.Num(), bLocalPlayerIsWinner ? TEXT("Yes") : TEXT("No"));
+}
+
+void UMatchResultsWidget::UpdatePersonalResultDisplay(bool bIsWinner)
+{
+    // Show/hide victory/defeat overlays if they exist
+    if (VictoryOverlay)
+    {
+        VictoryOverlay->SetVisibility(bIsWinner ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+    }
+
+    if (DefeatOverlay)
+    {
+        DefeatOverlay->SetVisibility(bIsWinner ? ESlateVisibility::Hidden : ESlateVisibility::Visible);
+    }
+
+    // Update personal result text if it exists
+    if (PersonalResultText)
+    {
+        if (bIsWinner)
+        {
+            PersonalResultText->SetText(FText::FromString(TEXT("YOU WIN!")));
+            PersonalResultText->SetColorAndOpacity(FLinearColor(1.0f, 0.84f, 0.0f, 1.0f)); // Gold color
+        }
+        else
+        {
+            PersonalResultText->SetText(FText::FromString(TEXT("ELIMINATED")));
+            PersonalResultText->SetColorAndOpacity(FLinearColor(0.8f, 0.1f, 0.1f, 1.0f)); // Red color
+        }
+    }
+}
+
+bool UMatchResultsWidget::IsLocalPlayerWinner() const
+{
+    if (!MatchGameState)
+    {
+        return false;
+    }
+
+    // Get the local player controller
+    if (APlayerController* LocalPC = GetOwningPlayer())
+    {
+        if (APlayerState* LocalPlayerState = LocalPC->GetPlayerState<APlayerState>())
+        {
+            const FString LocalPlayerName = LocalPlayerState->GetPlayerName();
+            
+            // Check if this player's result shows them as winner
+            for (const FPlayerMatchResult& Result : MatchGameState->PlayerResults)
+            {
+                if (Result.PlayerName == LocalPlayerName)
+                {
+                    return Result.bIsWinner;
+                }
+            }
+        }
+    }
+
+    return false;
 }
 
 void UMatchResultsWidget::CreatePlayerResultEntry(const FPlayerMatchResult& PlayerResult, int32 Rank)
@@ -133,6 +209,16 @@ void UMatchResultsWidget::CreatePlayerResultEntry(const FPlayerMatchResult& Play
     UTextBlock* PlayerEntry = NewObject<UTextBlock>(this);
     if (PlayerEntry)
     {
+        // Check if this entry is for the local player
+        bool bIsLocalPlayer = false;
+        if (APlayerController* LocalPC = GetOwningPlayer())
+        {
+            if (APlayerState* LocalPlayerState = LocalPC->GetPlayerState<APlayerState>())
+            {
+                bIsLocalPlayer = (PlayerResult.PlayerName == LocalPlayerState->GetPlayerName());
+            }
+        }
+
         FString EntryText;
         if (PlayerResult.bIsWinner)
         {
@@ -155,11 +241,22 @@ void UMatchResultsWidget::CreatePlayerResultEntry(const FPlayerMatchResult& Play
         // Style the text
         FSlateFontInfo FontInfo = PlayerEntry->GetFont();
         FontInfo.Size = 18;
+        
+        // Highlight local player entry
+        if (bIsLocalPlayer)
+        {
+            FontInfo.Size = 22; // Larger font for local player
+        }
+        
         PlayerEntry->SetFont(FontInfo);
         
         if (PlayerResult.bIsWinner)
         {
-            PlayerEntry->SetColorAndOpacity(FLinearColor::Green);
+            PlayerEntry->SetColorAndOpacity(FLinearColor(1.0f, 0.84f, 0.0f, 1.0f)); // Gold for winner
+        }
+        else if (bIsLocalPlayer)
+        {
+            PlayerEntry->SetColorAndOpacity(FLinearColor(0.0f, 0.5f, 1.0f, 1.0f)); // Blue for local player
         }
         else if (!PlayerResult.bIsAlive)
         {
