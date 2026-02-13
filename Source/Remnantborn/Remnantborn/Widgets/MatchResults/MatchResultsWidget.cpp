@@ -53,7 +53,28 @@ void UMatchResultsWidget::InitializeMatchResults()
     
     if (!MatchGameState)
     {
-        UE_LOG(LogTemp, Warning, TEXT("MatchResultsWidget: Could not get MultiplayerMatchGameState"));
+        UE_LOG(LogTemp, Warning, TEXT("MatchResultsWidget: Could not get MultiplayerMatchGameState, will retry..."));
+        
+        // Retry initialization after a short delay
+        FTimerHandle RetryTimer;
+        GetWorld()->GetTimerManager().SetTimer(RetryTimer, [this]()
+        {
+            if (!MatchGameState)
+            {
+                MatchGameState = GetWorld() ? GetWorld()->GetGameState<AMultiplayerMatchGameState>() : nullptr;
+                if (MatchGameState)
+                {
+                    UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Successfully got GameState on retry"));
+                    MatchGameState->OnMatchStateChanged.AddDynamic(this, &UMatchResultsWidget::OnMatchStateChangedDelegate);
+                    OnMatchStateChanged(MatchGameState->CurrentMatchState);
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Error, TEXT("MatchResultsWidget: Still couldn't get GameState after retry!"));
+                }
+            }
+        }, 1.0f, false);
+        
         return;
     }
 
@@ -62,6 +83,8 @@ void UMatchResultsWidget::InitializeMatchResults()
 
     // Update initial state
     OnMatchStateChanged(MatchGameState->CurrentMatchState);
+    
+    UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Successfully initialized with GameState"));
 }
 
 void UMatchResultsWidget::OnMatchStateChanged(EMatchState NewState)

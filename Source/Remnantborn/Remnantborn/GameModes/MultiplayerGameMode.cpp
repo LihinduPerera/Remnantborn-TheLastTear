@@ -8,6 +8,7 @@
 #include "GameplayTagContainer.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterPlayerState.h"
 #include "Remnantborn/Remnantborn/GameplayAbilitySystem/Characters/RemnantbornCharacterBase.h"
+#include "Remnantborn/Remnantborn/GameplayAbilitySystem/AttributeSets/BasicAttributeSet.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterDataAsset.h"
 #include "Remnantborn/Remnantborn/OnlineService/MyOnlineGameInstance.h"
@@ -40,7 +41,9 @@ void AMultiplayerGameMode::BeginPlay()
 	FTimerHandle InitTimer;
 	FTimerDelegate InitDelegate;
 	InitDelegate.BindUFunction(this, "InitializeMatchTracking");
-	GetWorld()->GetTimerManager().SetTimer(InitTimer, InitDelegate, 2.0f, false);
+	GetWorld()->GetTimerManager().SetTimer(InitTimer, InitDelegate, 3.0f, false); // Increased to 3 seconds
+	
+	UE_LOG(LogTemp, Log, TEXT("MultiplayerGameMode: BeginPlay - Match tracking will initialize in 3 seconds"));
 }
 
 void AMultiplayerGameMode::Tick(float DeltaTime)
@@ -74,6 +77,8 @@ void AMultiplayerGameMode::PostLogin(APlayerController* NewPlayer)
 		return;
 	}
 
+	UE_LOG(LogTemp, Log, TEXT("PostLogin: Player joined - %s"), *NewPlayer->GetName());
+
 	// Check if player controller is the expected type (optional RPC features)
 	AMultiplayerPlayerController* MultiplayerPC = Cast<AMultiplayerPlayerController>(NewPlayer);
 	if (!MultiplayerPC)
@@ -94,6 +99,14 @@ void AMultiplayerGameMode::PostLogin(APlayerController* NewPlayer)
 	FTimerDelegate SpawnDelegate;
 	SpawnDelegate.BindUFunction(this, "RetrySpawnPlayerWithCharacter", NewPlayer, 0);
 	GetWorld()->GetTimerManager().SetTimer(SpawnTimer, SpawnDelegate, 0.2f, false);
+	
+	// Re-initialize match tracking to include the new player
+	// This ensures the PlayerResults array includes all players
+	FTimerHandle ReinitTimer;
+	GetWorld()->GetTimerManager().SetTimer(ReinitTimer, [this]()
+	{
+		InitializeMatchTracking();
+	}, 1.0f, false);
 }
 
 void AMultiplayerGameMode::Logout(AController* Exiting)
@@ -549,10 +562,23 @@ void AMultiplayerGameMode::NotifyPlayerDied(APlayerController* PlayerController)
         return;
     }
 
+    // Check if match is already finished - don't process further deaths
+    if (MatchGameState->IsMatchFinished())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("MultiplayerGameMode: Match already finished, ignoring death of %s"), *PlayerState->GetPlayerName());
+        return;
+    }
+
     FString PlayerName = PlayerState->GetPlayerName();
     int32 PlayerId = PlayerState->GetPlayerId();
 
     UE_LOG(LogTemp, Log, TEXT("MultiplayerGameMode: Player %s died, notifying match state"), *PlayerName);
+    
+    // Notify the dead player immediately (for death cam/effects)
+    if (AMultiplayerPlayerController* MPC = Cast<AMultiplayerPlayerController>(PlayerController))
+    {
+        MPC->Client_NotifyPlayerDeath(TEXT("")); // Empty string for now, can be extended to pass killer info
+    }
     
     // Notify the game state about the player death
     MatchGameState->OnPlayerDeath(PlayerName, PlayerId);
@@ -560,16 +586,21 @@ void AMultiplayerGameMode::NotifyPlayerDied(APlayerController* PlayerController)
     // Check if match is finished and show results to all players
     if (MatchGameState->IsMatchFinished())
     {
-        UE_LOG(LogTemp, Log, TEXT("MultiplayerGameMode: Match finished, showing results to all players"));
+        UE_LOG(LogTemp, Log, TEXT("MultiplayerGameMode: Match finished, showing results to all players in 2 seconds..."));
         
-        // Show match results to all players
-        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+        // Use a timer to show results after a short delay (allows for death animations)
+        FTimerHandle ShowResultsTimer;
+        GetWorld()->GetTimerManager().SetTimer(ShowResultsTimer, [this]()
         {
-            if (AMultiplayerPlayerController* PC = Cast<AMultiplayerPlayerController>(It->Get()))
+            // Show match results to all players
+            for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
             {
-                PC->Client_ShowMatchResults();
+                if (AMultiplayerPlayerController* PC = Cast<AMultiplayerPlayerController>(It->Get()))
+                {
+                    PC->Client_ShowMatchResults();
+                }
             }
-        }
+        }, 2.0f, false);
     }
 }
 
@@ -581,7 +612,13 @@ void AMultiplayerGameMode::CheckForPlayerDeaths()
     }
 
     AMultiplayerMatchGameState* MatchGameState = GetGameState<AMultiplayerMatchGameState>();
-    if (!MatchGameState || MatchGameState->IsMatchFinished())
+    if (!MatchGameState)
+    {
+        UE_LOG(LogTemp, Error, TEXT("CheckForPlayerDeaths: No MatchGameState found!"));
+        return;
+    }
+
+    if (MatchGameState->IsMatchFinished())
     {
         return;
     }
@@ -592,9 +629,14 @@ void AMultiplayerGameMode::CheckForPlayerDeaths()
         return;
     }
 
+    // Debug: Log how many controllers we're checking
+    int32 ControllerCount = 0;
+    int32 DeadCount = 0;
+
     // Check all player controllers for dead characters
     for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
     {
+        ControllerCount++;
         APlayerController* PC = It->Get();
         if (!PC)
         {
@@ -615,23 +657,71 @@ void AMultiplayerGameMode::CheckForPlayerDeaths()
             continue;
         }
 
-        // Check if character has the death tag
+        // Check if character is dead (either by tag OR by health <= 0)
         if (UAbilitySystemComponent* ASC = Character->GetAbilitySystemComponent())
         {
             static FGameplayTag DeathTag = FGameplayTag::RequestGameplayTag("State.Dead");
-            if (ASC->HasMatchingGameplayTag(DeathTag))
+            bool bHasDeathTag = ASC->HasMatchingGameplayTag(DeathTag);
+            
+            // Also check health directly as a backup
+            bool bIsHealthZero = false;
+            if (const UBasicAttributeSet* BasicAttrSet = Cast<UBasicAttributeSet>(ASC->GetAttributeSet(UBasicAttributeSet::StaticClass())))
             {
+                bIsHealthZero = BasicAttrSet->GetHealth() <= 0.0f;
+            }
+            
+            bool bIsDead = bHasDeathTag || bIsHealthZero;
+            
+            if (bIsDead)
+            {
+                DeadCount++;
+                
                 // Check if we've already recorded this death
                 ACharacterPlayerState* PlayerState = PC->GetPlayerState<ACharacterPlayerState>();
                 if (PlayerState)
                 {
-                    FPlayerMatchResult ExistingResult = MatchGameState->GetPlayerResult(PlayerState->GetPlayerName());
+                    FString PlayerName = PlayerState->GetPlayerName();
+                    FPlayerMatchResult ExistingResult = MatchGameState->GetPlayerResult(PlayerName);
+                    
+                    UE_LOG(LogTemp, Log, TEXT("CheckForPlayerDeaths: Found dead player %s - bIsAlive=%s (DeathTag=%s, HealthZero=%s)"), 
+                        *PlayerName, 
+                        ExistingResult.bIsAlive ? TEXT("true") : TEXT("false"),
+                        bHasDeathTag ? TEXT("YES") : TEXT("NO"),
+                        bIsHealthZero ? TEXT("YES") : TEXT("NO"));
+                    
                     if (ExistingResult.bIsAlive) // Still marked as alive, so this is a new death
                     {
+                        UE_LOG(LogTemp, Warning, TEXT("CheckForPlayerDeaths: Processing NEW death for %s"), *PlayerName);
+                        
+                        // Ensure the death tag is applied for consistency
+                        if (!bHasDeathTag && bIsHealthZero)
+                        {
+                            UE_LOG(LogTemp, Warning, TEXT("CheckForPlayerDeaths: Player %s has 0 health but no death tag - applying tag now"), *PlayerName);
+                            ASC->AddLooseGameplayTag(DeathTag);
+                        }
+                        
                         NotifyPlayerDied(PC);
                     }
+                    else
+                    {
+                        UE_LOG(LogTemp, Verbose, TEXT("CheckForPlayerDeaths: Player %s already recorded as dead"), *PlayerName);
+                    }
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("CheckForPlayerDeaths: Dead character has no PlayerState!"));
                 }
             }
         }
+    }
+
+    // Debug log every few seconds
+    static float LastDebugTime = 0.0f;
+    float CurrentTime = World->GetTimeSeconds();
+    if (CurrentTime - LastDebugTime > 5.0f)
+    {
+        UE_LOG(LogTemp, Log, TEXT("CheckForPlayerDeaths: Checking %d controllers, found %d dead. AlivePlayerCount=%d"), 
+            ControllerCount, DeadCount, MatchGameState->AlivePlayerCount);
+        LastDebugTime = CurrentTime;
     }
 }

@@ -157,15 +157,27 @@ void AMultiplayerPlayerController::InitializeHUD()
 		return;
 	}
 
-	// Create match results widget if class is set
+	// Create match results widget if class is set and not already created
 	if (MatchResultsWidgetClass && !MatchResultsWidget)
 	{
 		MatchResultsWidget = CreateWidget<UMatchResultsWidget>(this, MatchResultsWidgetClass);
 		if (MatchResultsWidget)
 		{
-			MatchResultsWidget->AddToViewport();
-			UE_LOG(LogTemp, Log, TEXT("MultiplayerPlayerController: Match results widget created and added to viewport"));
+			MatchResultsWidget->AddToViewport(100); // High Z-order to ensure it's on top
+			MatchResultsWidget->SetVisibility(ESlateVisibility::Hidden); // Start hidden
+			MatchResultsWidget->InitializeMatchResults(); // Initialize with game state
+			
+			UE_LOG(LogTemp, Log, TEXT("MultiplayerPlayerController: Match results widget created, added to viewport (Z-Order 100), and initialized"));
 		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("MultiplayerPlayerController: Failed to create MatchResultsWidget from class %s"), 
+				*MatchResultsWidgetClass->GetName());
+		}
+	}
+	else if (!MatchResultsWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MultiplayerPlayerController: MatchResultsWidgetClass is not set! Please assign it in the PlayerController Blueprint."));
 	}
 	
 	UE_LOG(LogTemp, Log, TEXT("HUD initialization called for local player"));
@@ -198,16 +210,56 @@ void AMultiplayerPlayerController::SetupGASForPawn(APawn* InPawn)
 
 void AMultiplayerPlayerController::Client_ShowMatchResults_Implementation()
 {
+	UE_LOG(LogTemp, Warning, TEXT("Client_ShowMatchResults CALLED for %s (LocalPlayer=%s, HasWidget=%s)"),
+		*GetName(),
+		IsLocalPlayerController() ? TEXT("YES") : TEXT("NO"),
+		MatchResultsWidget ? TEXT("YES") : TEXT("NO"));
+
 	if (MatchResultsWidget)
 	{
+		// Refresh the results display before showing
+		MatchResultsWidget->UpdateResultsDisplay();
+		
+		// Show the widget
 		MatchResultsWidget->SetVisibility(ESlateVisibility::Visible);
 		
 		// Set UI input mode for interaction
 		FInputModeUIOnly InputMode;
+		InputMode.SetWidgetToFocus(MatchResultsWidget->TakeWidget());
 		SetInputMode(InputMode);
 		bShowMouseCursor = true;
 		
-		UE_LOG(LogTemp, Log, TEXT("MultiplayerPlayerController: Match results shown"));
+		// Disable player input while showing results
+		SetIgnoreMoveInput(true);
+		SetIgnoreLookInput(true);
+		
+		UE_LOG(LogTemp, Log, TEXT("MultiplayerPlayerController: Match results shown for %s"), 
+			*GetName());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("MultiplayerPlayerController: Cannot show match results - widget not created! WidgetClass=%s"),
+			MatchResultsWidgetClass ? *MatchResultsWidgetClass->GetName() : TEXT("NULL"));
+		
+		// Try to reinitialize HUD and show again
+		InitializeHUD();
+		
+		if (MatchResultsWidget)
+		{
+			UE_LOG(LogTemp, Log, TEXT("MultiplayerPlayerController: Widget created on retry, showing results..."));
+			MatchResultsWidget->UpdateResultsDisplay();
+			MatchResultsWidget->SetVisibility(ESlateVisibility::Visible);
+			
+			FInputModeUIOnly InputMode;
+			SetInputMode(InputMode);
+			bShowMouseCursor = true;
+			SetIgnoreMoveInput(true);
+			SetIgnoreLookInput(true);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("MultiplayerPlayerController: FAILED to create widget even after retry!"));
+		}
 	}
 }
 
@@ -220,6 +272,20 @@ void AMultiplayerPlayerController::Client_HideMatchResults_Implementation()
 		// Return to game input mode
 		SetupInputMode();
 		
+		// Re-enable player input
+		SetIgnoreMoveInput(false);
+		SetIgnoreLookInput(false);
+		
 		UE_LOG(LogTemp, Log, TEXT("MultiplayerPlayerController: Match results hidden"));
 	}
+}
+
+void AMultiplayerPlayerController::Client_NotifyPlayerDeath_Implementation(const FString& KillerName)
+{
+	// Show death notification to the player who died
+	// This can be extended to show a kill feed or death cam
+	UE_LOG(LogTemp, Log, TEXT("Player died! Killer: %s"), *KillerName);
+	
+	// Optional: Show a death overlay before match ends
+	// This is useful for showing "YOU DIED" message immediately
 }

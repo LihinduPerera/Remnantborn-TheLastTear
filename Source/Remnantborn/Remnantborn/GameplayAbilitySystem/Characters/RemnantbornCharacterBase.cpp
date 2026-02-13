@@ -7,6 +7,9 @@
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterPlayerState.h"
 #include "Remnantborn/Remnantborn/GameplayAbilitySystem/RemnantbornAbilitySystemComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/GameModeBase.h"
+#include "Remnantborn/Remnantborn/GameModes/MultiplayerGameMode.h"
 
 // Sets default values
 ARemnantbornCharacterBase::ARemnantbornCharacterBase()
@@ -172,8 +175,26 @@ void ARemnantbornCharacterBase::HandleDeath_Implementation()
 
 	GetMesh()->AddImpulseAtLocation(Impulse, GetActorLocation());
 
-	// Note: Game mode integration for player death tracking will be handled elsewhere
-    // The existing death mechanics (physics, movement disable) are preserved
+	// Notify GameMode about player death - ONLY on server
+	if (HasAuthority())
+	{
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			if (AMultiplayerGameMode* GameMode = Cast<AMultiplayerGameMode>(GetWorld()->GetAuthGameMode()))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("HandleDeath: Notifying GameMode about death of %s"), *PC->GetName());
+				GameMode->NotifyPlayerDied(PC);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("HandleDeath: GameMode is not AMultiplayerGameMode!"));
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("HandleDeath: No PlayerController found!"));
+		}
+	}
 }
 
 void ARemnantbornCharacterBase::OnDeadTagChanged(

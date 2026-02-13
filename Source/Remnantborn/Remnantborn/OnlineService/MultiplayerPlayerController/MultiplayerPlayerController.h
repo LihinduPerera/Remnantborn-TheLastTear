@@ -30,6 +30,15 @@ UFUNCTION(Client, Reliable)
 	void Client_HideMatchResults();
 
 	/**
+	 * Notify client that their player has died.
+	 * Called immediately when the local player dies for instant feedback.
+	 * 
+	 * @param KillerName - Name of the player who killed them (empty if suicide/environmental)
+	 */
+	UFUNCTION(Client, Reliable)
+	void Client_NotifyPlayerDeath(const FString& KillerName);
+
+	/**
 	 * Server RPC for clients to notify the server of their character selection.
 	 * This is called when clients join the game level to ensure their lobby selection is applied.
 	 * 
