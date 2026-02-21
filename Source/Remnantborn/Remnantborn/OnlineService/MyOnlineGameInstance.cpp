@@ -6,7 +6,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Engine/LocalPlayer.h"
 #include "Kismet/GameplayStatics.h"
-#include "Kismet/KismetSystemLibrary.h"
+#include "Sound/SoundCue.h"
 
 UMyOnlineGameInstance::UMyOnlineGameInstance()
 {
@@ -15,6 +15,12 @@ UMyOnlineGameInstance::UMyOnlineGameInstance()
     bIsHosting = false;
     bIsLoggedIn = false;
     LobbyMapPath = TEXT("/Game/Remnantborn/Levels/Lobby");
+    
+    MusicVolume = 0.5f;
+    bShufflePlaylist = true;
+    bAutoPlayOnLevelChange = true;
+    CurrentTrackIndex = 0;
+    MusicAudioComponent = nullptr;
 }
 
 void UMyOnlineGameInstance::Init()
@@ -48,6 +54,17 @@ void UMyOnlineGameInstance::Init()
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to create HTTP Service"));
     }
+    
+    // Auto-start background music if enabled
+    if (bAutoPlayOnLevelChange && MusicPlaylist.Num() > 0)
+    {
+        // Delay music start until world is ready (audio device initialized)
+        FTimerHandle UnusedHandle;
+        GetWorld()->GetTimerManager().SetTimer(UnusedHandle, [this]()
+        {
+            StartBackgroundMusic();
+        }, 1.0f, false);
+    }
 }
 
 void UMyOnlineGameInstance::Shutdown()
@@ -59,6 +76,15 @@ void UMyOnlineGameInstance::Shutdown()
     }
     
     DestroySession();
+    
+    // Clean up music
+    if (MusicAudioComponent)
+    {
+        MusicAudioComponent->Stop();
+        MusicAudioComponent->OnAudioFinished.Clear();
+        MusicAudioComponent->DestroyComponent();
+        MusicAudioComponent = nullptr;
+    }
     
     // Clean up HTTP Service
     if (HttpService)
@@ -872,6 +898,9 @@ void UMyOnlineGameInstance::ClearAllCharacterSelections()
 
 void UMyOnlineGameInstance::TravelToGameLevel(FString GameMapPath)
 {
+    // Stop background music when starting the game
+    StopBackgroundMusic();
+    
     // Only server should initiate the travel
     if (!bIsHosting)
     {
@@ -895,5 +924,132 @@ void UMyOnlineGameInstance::TravelToGameLevel(FString GameMapPath)
         UE_LOG(LogTemp, Log, TEXT("Server traveling to game level: %s"), *TravelPath);
         GetWorld()->ServerTravel(TravelPath);
     }
+}
+
+// === Background Music Implementation ===
+
+void UMyOnlineGameInstance::StartBackgroundMusic()
+{
+    if (MusicPlaylist.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BackgroundMusic: No tracks in playlist"));
+        return;
+    }
+    
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogTemp, Error, TEXT("BackgroundMusic: No world found"));
+        return;
+    }
+    
+    // Use SpawnSound2D for reliable audio playback
+    if (bShufflePlaylist)
+    {
+        CurrentTrackIndex = FMath::RandRange(0, MusicPlaylist.Num() - 1);
+    }
+    else
+    {
+        CurrentTrackIndex = 0;
+    }
+    
+    PlayNextTrack();
+    UE_LOG(LogTemp, Log, TEXT("BackgroundMusic: Started playing playlist with %d tracks"), MusicPlaylist.Num());
+}
+
+void UMyOnlineGameInstance::StopBackgroundMusic()
+{
+    if (MusicAudioComponent)
+    {
+        MusicAudioComponent->Stop();
+        UE_LOG(LogTemp, Log, TEXT("BackgroundMusic: Stopped"));
+    }
+}
+
+void UMyOnlineGameInstance::SetMusicVolume(float Volume)
+{
+    MusicVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
+    
+    if (MusicAudioComponent)
+    {
+        MusicAudioComponent->SetVolumeMultiplier(MusicVolume);
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("BackgroundMusic: Volume set to %f"), MusicVolume);
+}
+
+bool UMyOnlineGameInstance::IsMusicPlaying() const
+{
+    return MusicAudioComponent && MusicAudioComponent->IsPlaying();
+}
+
+void UMyOnlineGameInstance::PlayNextTrack()
+{
+    if (MusicPlaylist.Num() == 0)
+    {
+        return;
+    }
+    
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+    
+    USoundCue* CurrentTrack = MusicPlaylist[CurrentTrackIndex];
+    if (!CurrentTrack)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BackgroundMusic: Invalid track at index %d"), CurrentTrackIndex);
+        CurrentTrackIndex = (CurrentTrackIndex + 1) % MusicPlaylist.Num();
+        PlayNextTrack();
+        return;
+    }
+    
+    // Clean up previous component
+    if (MusicAudioComponent)
+    {
+        MusicAudioComponent->Stop();
+        MusicAudioComponent->OnAudioFinished.Clear();
+        MusicAudioComponent->DestroyComponent();
+        MusicAudioComponent = nullptr;
+    }
+    
+    // Spawn new 2D sound
+    MusicAudioComponent = UGameplayStatics::SpawnSound2D(World, CurrentTrack, MusicVolume);
+    
+    if (MusicAudioComponent)
+    {
+        MusicAudioComponent->OnAudioFinished.AddDynamic(this, &UMyOnlineGameInstance::OnTrackFinished);
+        UE_LOG(LogTemp, Log, TEXT("BackgroundMusic: Playing track %d: %s"), CurrentTrackIndex, *CurrentTrack->GetName());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("BackgroundMusic: Failed to spawn sound"));
+    }
+}
+
+void UMyOnlineGameInstance::OnTrackFinished()
+{
+    if (MusicPlaylist.Num() == 0)
+    {
+        return;
+    }
+    
+    if (bShufflePlaylist)
+    {
+        int32 NewIndex;
+        do
+        {
+            NewIndex = FMath::RandRange(0, MusicPlaylist.Num() - 1);
+        } while (NewIndex == CurrentTrackIndex && MusicPlaylist.Num() > 1);
+        
+        CurrentTrackIndex = NewIndex;
+    }
+    else
+    {
+        CurrentTrackIndex = (CurrentTrackIndex + 1) % MusicPlaylist.Num();
+    }
+    
+    PlayNextTrack();
 }
 

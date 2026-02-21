@@ -6,6 +6,7 @@
 #include "OnlineSessionSettings.h"
 #include "FindSessionsCallbackProxy.h"
 #include "UEdsHttpService.h"
+#include "Components/AudioComponent.h"
 #include "MyOnlineGameInstance.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSessionSearchCompleted, bool, bSuccess);
@@ -116,6 +117,22 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Multiplayer")
     void TravelToGameLevel(FString GameMapPath = "/Game/Remnantborn/Levels/TestGround");
     
+    // === Background Music Functions ===
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void StartBackgroundMusic();
+    
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void StopBackgroundMusic();
+    
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void SetMusicVolume(float Volume);
+    
+    UFUNCTION(BlueprintPure, Category = "BackgroundMusic")
+    float GetMusicVolume() const { return MusicVolume; }
+    
+    UFUNCTION(BlueprintPure, Category = "BackgroundMusic")
+    bool IsMusicPlaying() const;
+    
     // === Authentication Functions ===
     UFUNCTION(BlueprintCallable, Category = "Authentication")
     void Login(const FString& Email, const FString& Password);
@@ -186,6 +203,19 @@ public:
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Multiplayer")
     int32 DefaultMaxPlayers = 4;
+    
+    // === Background Music ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
+    TArray<USoundCue*> MusicPlaylist;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
+    float MusicVolume = 0.5f;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
+    bool bShufflePlaylist = true;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
+    bool bAutoPlayOnLevelChange = true;
 
 protected:
     virtual void Init() override;
@@ -245,4 +275,13 @@ private:
     
     // Helper methods
     void SetAuthState(bool bLoggedIn, const FString& Token = FString(), const FString& UserId = FString(), const FUserProfile& Profile = FUserProfile());
+    
+    // === Background Music ===
+    UPROPERTY()
+    UAudioComponent* MusicAudioComponent;
+    
+    int32 CurrentTrackIndex;
+    
+    void PlayNextTrack();
+    void OnTrackFinished();
 };
