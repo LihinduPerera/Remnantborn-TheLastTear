@@ -338,7 +338,7 @@ void ALobbyGameMode::ExecuteMatchTravel()
     // Switch to gameplay music when game starts
     if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
     {
-        GameInstance->PlayGameplayMusic();
+        GameInstance->OnMatchStarted();
     }
 
     FString TravelPath = GameMapPath + "?listen";

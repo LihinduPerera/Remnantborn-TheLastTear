@@ -167,6 +167,9 @@ void UMainMenuWidget::OnHostButtonClicked()
     UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
     if (GameInstance)
     {
+        // Prepare music for level transition - keeps music state for seamless transition
+        GameInstance->PrepareForLevelTravel();
+        
         SetStatusText("Creating session...");
         ClearError();
         
@@ -218,6 +221,7 @@ void UMainMenuWidget::OnJoinButtonClicked()
         UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
         if (GameInstance)
         {
+            GameInstance->PrepareForLevelTravel();
             SetStatusText("Joining session...");
             ClearError();
             GameInstance->JoinSessionByIndex(SelectedSessionIndex);

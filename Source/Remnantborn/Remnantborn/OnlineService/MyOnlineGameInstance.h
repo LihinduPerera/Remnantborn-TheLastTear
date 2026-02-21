@@ -157,6 +157,25 @@ public:
     UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
     void PlayResultMusic(bool bIsVictory);
     
+    // === Redesigned Music System Methods ===
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void PrepareForLevelTravel();
+    
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void OnEnteredLobby();
+    
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void OnMatchStarted();
+    
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void OnMatchEnded(bool bIsVictory);
+    
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void OnReturningToLobby();
+    
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void ResumeMenuMusic();
+    
     // === Authentication Functions ===
     UFUNCTION(BlueprintCallable, Category = "Authentication")
     void Login(const FString& Email, const FString& Password);
@@ -249,6 +268,18 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
     EMusicState CurrentMusicState = EMusicState::None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
+    EMusicState PendingMusicState = EMusicState::Menu;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
+    bool bMusicWasPlayingBeforeTravel = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
+    bool bIsInMatch = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
+    bool bMatchHasEnded = false;
 
 protected:
     virtual void Init() override;

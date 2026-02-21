@@ -108,12 +108,16 @@ void UMatchResultsWidget::OnMatchStateChanged(EMatchState NewState)
             if (UMyOnlineGameInstance* GameInstance = GetGameInstance<UMyOnlineGameInstance>())
             {
                 const bool bLocalPlayerIsWinner = IsLocalPlayerWinner();
-                UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Playing result music. IsWinner: %d"), bLocalPlayerIsWinner);
-                GameInstance->PlayResultMusic(bLocalPlayerIsWinner);
+                bool bIsLocal = GetOwningPlayer() ? GetOwningPlayer()->IsLocalController() : false;
+                UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Playing result music. IsWinner: %d, IsLocal=%d"), 
+                    bLocalPlayerIsWinner, bIsLocal);
+                GameInstance->OnMatchEnded(bLocalPlayerIsWinner);
             }
             else
             {
-                UE_LOG(LogTemp, Error, TEXT("MatchResultsWidget: Could not get GameInstance!"));
+                bool bIsLocal = GetOwningPlayer() ? GetOwningPlayer()->IsLocalController() : false;
+                UE_LOG(LogTemp, Error, TEXT("MatchResultsWidget: Could not get GameInstance! IsLocal=%d"), 
+                    bIsLocal);
             }
             
             // Update the results display
@@ -314,8 +318,9 @@ void UMatchResultsWidget::OnReturnToLobbyClicked()
     // Stop result music and play menu music
     if (UMyOnlineGameInstance* GameInstance = GetGameInstance<UMyOnlineGameInstance>())
     {
-        GameInstance->StopBackgroundMusic();
-        GameInstance->PlayMenuMusic();
+        bool bIsLocal = GetOwningPlayer() ? GetOwningPlayer()->IsLocalController() : false;
+        UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Returning to lobby, IsLocal=%d"), bIsLocal);
+        GameInstance->OnReturningToLobby();
     }
     
     // Return to main menu/lobby
@@ -327,10 +332,12 @@ void UMatchResultsWidget::OnReturnToLobbyClicked()
 
 void UMatchResultsWidget::OnPlayAgainClicked()
 {
-    // Stop result music and play gameplay music for the new match
+    // Stop result music and prepare for new match
     if (UMyOnlineGameInstance* GameInstance = GetGameInstance<UMyOnlineGameInstance>())
     {
-        GameInstance->StopBackgroundMusic();
+        bool bIsLocal = GetOwningPlayer() ? GetOwningPlayer()->IsLocalController() : false;
+        UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Play again, IsLocal=%d"), bIsLocal);
+        GameInstance->PrepareForLevelTravel();
     }
     
     // Restart the current level for a new match
