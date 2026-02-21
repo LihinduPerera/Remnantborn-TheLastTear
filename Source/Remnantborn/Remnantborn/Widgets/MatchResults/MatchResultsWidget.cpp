@@ -7,6 +7,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/GameModeBase.h"
+#include "Remnantborn/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 
 void UMatchResultsWidget::NativeConstruct()
 {
@@ -101,6 +102,19 @@ void UMatchResultsWidget::OnMatchStateChanged(EMatchState NewState)
             // Start the auto-show timer
             bShouldAutoShow = true;
             TimeSinceMatchEnd = 0.0f;
+            
+            // Play result music - this works on both host and client
+            // because each client has their own GameInstance
+            if (UMyOnlineGameInstance* GameInstance = GetGameInstance<UMyOnlineGameInstance>())
+            {
+                const bool bLocalPlayerIsWinner = IsLocalPlayerWinner();
+                UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Playing result music. IsWinner: %d"), bLocalPlayerIsWinner);
+                GameInstance->PlayResultMusic(bLocalPlayerIsWinner);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("MatchResultsWidget: Could not get GameInstance!"));
+            }
             
             // Update the results display
             UpdateResultsDisplay();
@@ -297,6 +311,13 @@ void UMatchResultsWidget::CreatePlayerResultEntry(const FPlayerMatchResult& Play
 
 void UMatchResultsWidget::OnReturnToLobbyClicked()
 {
+    // Stop result music and play menu music
+    if (UMyOnlineGameInstance* GameInstance = GetGameInstance<UMyOnlineGameInstance>())
+    {
+        GameInstance->StopBackgroundMusic();
+        GameInstance->PlayMenuMusic();
+    }
+    
     // Return to main menu/lobby
     if (APlayerController* PC = GetOwningPlayer())
     {
@@ -306,6 +327,12 @@ void UMatchResultsWidget::OnReturnToLobbyClicked()
 
 void UMatchResultsWidget::OnPlayAgainClicked()
 {
+    // Stop result music and play gameplay music for the new match
+    if (UMyOnlineGameInstance* GameInstance = GetGameInstance<UMyOnlineGameInstance>())
+    {
+        GameInstance->StopBackgroundMusic();
+    }
+    
     // Restart the current level for a new match
     if (APlayerController* PC = GetOwningPlayer())
     {

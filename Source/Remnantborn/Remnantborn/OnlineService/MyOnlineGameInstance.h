@@ -38,11 +38,20 @@ struct FSessionInfo
     FBlueprintSessionResult SessionResult;
 };
 
+UENUM(BlueprintType)
+enum class EMusicState : uint8
+{
+    None    UMETA(DisplayName = "None"),
+    Menu    UMETA(DisplayName = "Menu"),
+    Gameplay UMETA(DisplayName = "Gameplay"),
+    Result  UMETA(DisplayName = "Result")
+};
+
 UCLASS()
 class REMNANTBORN_API UMyOnlineGameInstance : public UGameInstance
 {
     GENERATED_BODY()
-    
+
 public:
     UMyOnlineGameInstance();
     
@@ -132,6 +141,21 @@ public:
     
     UFUNCTION(BlueprintPure, Category = "BackgroundMusic")
     bool IsMusicPlaying() const;
+
+    UFUNCTION(BlueprintPure, Category = "BackgroundMusic")
+    EMusicState GetMusicState() const { return CurrentMusicState; }
+    
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void SetMusicState(EMusicState NewState);
+    
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void PlayMenuMusic();
+    
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void PlayGameplayMusic();
+    
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void PlayResultMusic(bool bIsVictory);
     
     // === Authentication Functions ===
     UFUNCTION(BlueprintCallable, Category = "Authentication")
@@ -206,7 +230,13 @@ public:
     
     // === Background Music ===
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
-    TArray<USoundCue*> MusicPlaylist;
+    TArray<USoundCue*> MainMenuPlaylist;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
+    TArray<USoundCue*> GameplayPlaylist;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
+    TArray<USoundCue*> ResultPlaylist;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
     float MusicVolume = 0.5f;
@@ -217,9 +247,13 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
     bool bAutoPlayOnLevelChange = true;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
+    EMusicState CurrentMusicState = EMusicState::None;
+
 protected:
     virtual void Init() override;
     virtual void Shutdown() override;
+    virtual void OnStart() override;
     
 private:
     // === Multiplayer ===
@@ -282,6 +316,10 @@ private:
     
     int32 CurrentTrackIndex;
     
+    TArray<USoundCue*>* CurrentPlaylist;
+    
     void PlayNextTrack();
     void OnTrackFinished();
+    void PlayFromPlaylist(TArray<USoundCue*>* Playlist);
+    UWorld* GetMusicWorld() const;
 };

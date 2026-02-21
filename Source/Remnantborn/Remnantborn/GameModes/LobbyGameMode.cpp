@@ -335,6 +335,12 @@ void ALobbyGameMode::StartMatchTravel()
 
 void ALobbyGameMode::ExecuteMatchTravel()
 {
+    // Switch to gameplay music when game starts
+    if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
+    {
+        GameInstance->PlayGameplayMusic();
+    }
+
     FString TravelPath = GameMapPath + "?listen";
     UE_LOG(LogTemp, Log, TEXT("Starting match travel to: %s"), *TravelPath);
     GetWorld()->ServerTravel(TravelPath, true);
