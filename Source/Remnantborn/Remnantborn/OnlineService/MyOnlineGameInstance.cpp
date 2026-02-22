@@ -881,6 +881,33 @@ void UMyOnlineGameInstance::GetUserProfile()
     }));
 }
 
+void UMyOnlineGameInstance::GetMyProfile()
+{
+    if (!HttpService || !bIsLoggedIn || AuthToken.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Cannot get my profile: Not logged in"));
+        return;
+    }
+    
+    HttpService->GetMyProfile(AuthToken, FOnProfileResponse::CreateLambda([this](const FUserProfile& Profile)
+    {
+        if (Profile.bIsValid)
+        {
+            CurrentUserProfile = Profile;
+            
+            // Broadcast profile update
+            OnProfileUpdated.Broadcast(Profile);
+            
+            UE_LOG(LogTemp, Log, TEXT("My profile loaded: %s (Level: %d, Remnants: %d)"),
+                   *Profile.Username, Profile.Level, Profile.RemnantCount);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Failed to load my profile"));
+        }
+    }));
+}
+
 void UMyOnlineGameInstance::UpdateProfile(const FString& Username, const FString& Bio)
 {
     if (!HttpService || !bIsLoggedIn || CurrentUserId.IsEmpty() || AuthToken.IsEmpty())
@@ -889,9 +916,9 @@ void UMyOnlineGameInstance::UpdateProfile(const FString& Username, const FString
         return;
     }
     
-    HttpService->UpdateProfile(CurrentUserId, AuthToken, Username, Bio, FOnSimpleResponse::CreateLambda([this](bool bSuccess)
+    HttpService->UpdateProfile(CurrentUserId, AuthToken, Username, Bio, FOnProfileUpdateResponse::CreateLambda([this](const FProfileUpdateResponse& Response)
     {
-        if (bSuccess)
+        if (Response.bSuccess)
         {
             UE_LOG(LogTemp, Log, TEXT("Profile updated successfully"));
             // Refresh profile
@@ -899,7 +926,63 @@ void UMyOnlineGameInstance::UpdateProfile(const FString& Username, const FString
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("Failed to update profile"));
+            UE_LOG(LogTemp, Warning, TEXT("Failed to update profile: %s"), *Response.ErrorMessage);
+        }
+    }));
+}
+
+void UMyOnlineGameInstance::UpdateProfileWithAvatar(const FString& Username, const FString& Bio, const FString& AvatarUrl)
+{
+    if (!HttpService || !bIsLoggedIn || CurrentUserId.IsEmpty() || AuthToken.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Cannot update profile with avatar: Not logged in"));
+        return;
+    }
+    
+    HttpService->UpdateProfileWithAvatar(CurrentUserId, AuthToken, Username, Bio, AvatarUrl, FOnProfileUpdateResponse::CreateLambda([this](const FProfileUpdateResponse& Response)
+    {
+        if (Response.bSuccess)
+        {
+            UE_LOG(LogTemp, Log, TEXT("Profile with avatar updated successfully"));
+            // Refresh profile
+            GetUserProfile();
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Failed to update profile with avatar: %s"), *Response.ErrorMessage);
+        }
+    }));
+}
+
+void UMyOnlineGameInstance::UploadAvatar(const FString& FilePath)
+{
+    if (!HttpService || !bIsLoggedIn || AuthToken.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Cannot upload avatar: Not logged in"));
+        return;
+    }
+    
+    if (FilePath.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Cannot upload avatar: File path is empty"));
+        return;
+    }
+    
+    UE_LOG(LogTemp, Log, TEXT("Uploading avatar from: %s"), *FilePath);
+    
+    HttpService->UploadAvatar(AuthToken, FilePath, FOnAvatarUploadResponse::CreateLambda([this](const FAvatarUploadResponse& Response)
+    {
+        if (Response.bSuccess)
+        {
+            UE_LOG(LogTemp, Log, TEXT("Avatar uploaded successfully: %s"), *Response.AvatarUrl);
+            
+            // Update the current profile with the new avatar URL
+            CurrentUserProfile.AvatarUrl = Response.AvatarUrl;
+            OnProfileUpdated.Broadcast(CurrentUserProfile);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Failed to upload avatar: %s"), *Response.ErrorMessage);
         }
     }));
 }

@@ -214,7 +214,16 @@ public:
     void GetUserProfile();
     
     UFUNCTION(BlueprintCallable, Category = "Authentication")
+    void GetMyProfile();
+    
+    UFUNCTION(BlueprintCallable, Category = "Authentication")
     void UpdateProfile(const FString& Username, const FString& Bio);
+    
+    UFUNCTION(BlueprintCallable, Category = "Authentication")
+    void UpdateProfileWithAvatar(const FString& Username, const FString& Bio, const FString& AvatarUrl);
+    
+    UFUNCTION(BlueprintCallable, Category = "Authentication")
+    void UploadAvatar(const FString& FilePath);
     
     UFUNCTION(BlueprintCallable, Category = "Authentication")
     void UpdateGameStats(int32 Level, int32 RemnantCount, const FString& Operation = "set");

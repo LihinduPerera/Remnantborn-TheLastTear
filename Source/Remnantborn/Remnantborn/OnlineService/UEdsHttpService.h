@@ -39,6 +39,15 @@ struct FUserProfile
     FString LastActive;
     
     UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    FString CreatedAt;
+    
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    FString UpdatedAt;
+    
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    TArray<FString> PurchasedItems;
+    
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
     bool bIsValid = false;
 };
 
@@ -64,10 +73,50 @@ struct FAuthResponse
     int32 ResponseCode = 0;
 };
 
+// Profile Update Response
+USTRUCT(BlueprintType)
+struct FProfileUpdateResponse
+{
+    GENERATED_BODY()
+    
+    UPROPERTY(BlueprintReadWrite, Category = "Profile")
+    bool bSuccess = false;
+    
+    UPROPERTY(BlueprintReadWrite, Category = "Profile")
+    FString Username;
+    
+    UPROPERTY(BlueprintReadWrite, Category = "Profile")
+    FString AvatarUrl;
+    
+    UPROPERTY(BlueprintReadWrite, Category = "Profile")
+    FString Bio;
+    
+    UPROPERTY(BlueprintReadWrite, Category = "Profile")
+    FString ErrorMessage;
+};
+
+// Avatar Upload Response
+USTRUCT(BlueprintType)
+struct FAvatarUploadResponse
+{
+    GENERATED_BODY()
+    
+    UPROPERTY(BlueprintReadWrite, Category = "Profile")
+    bool bSuccess = false;
+    
+    UPROPERTY(BlueprintReadWrite, Category = "Profile")
+    FString AvatarUrl;
+    
+    UPROPERTY(BlueprintReadWrite, Category = "Profile")
+    FString ErrorMessage;
+};
+
 // Callback types
 DECLARE_DELEGATE_OneParam(FOnAuthResponse, const FAuthResponse&);
 DECLARE_DELEGATE_OneParam(FOnProfileResponse, const FUserProfile&);
 DECLARE_DELEGATE_OneParam(FOnSimpleResponse, bool);
+DECLARE_DELEGATE_OneParam(FOnProfileUpdateResponse, const FProfileUpdateResponse&);
+DECLARE_DELEGATE_OneParam(FOnAvatarUploadResponse, const FAvatarUploadResponse&);
 
 UCLASS()
 class REMNANTBORN_API UEdsHttpService : public UObject
@@ -88,7 +137,10 @@ public:
     
     // === Profile Methods ===
     void GetProfile(const FString& UserId, const FString& AuthToken, FOnProfileResponse Callback);
-    void UpdateProfile(const FString& UserId, const FString& AuthToken, const FString& Username, const FString& Bio, FOnSimpleResponse Callback);
+    void GetMyProfile(const FString& AuthToken, FOnProfileResponse Callback);
+    void UpdateProfile(const FString& UserId, const FString& AuthToken, const FString& Username, const FString& Bio, FOnProfileUpdateResponse Callback);
+    void UpdateProfileWithAvatar(const FString& UserId, const FString& AuthToken, const FString& Username, const FString& Bio, const FString& AvatarUrl, FOnProfileUpdateResponse Callback);
+    void UploadAvatar(const FString& AuthToken, const FString& FilePath, FOnAvatarUploadResponse Callback);
     void UpdateGameStats(const FString& UserId, const FString& AuthToken, int32 Level, int32 RemnantCount, const FString& Operation, FOnSimpleResponse Callback);
     
     // === Local Storage ===
@@ -102,15 +154,20 @@ private:
                      TFunction<void(const FHttpResponsePtr&, bool)> Callback);
     void SendRequestWithAuth(const FString& Endpoint, const FString& Verb, const TSharedPtr<FJsonObject>& JsonBody,
                             const FString& AuthToken, TFunction<void(const FHttpResponsePtr&, bool)> Callback);
+    void SendMultipartRequest(const FString& Endpoint, const FString& FilePath, const FString& FieldName,
+                             const FString& AuthToken, TFunction<void(const FHttpResponsePtr&, bool)> Callback);
     
     // Response Handlers
     void HandleAuthResponse(const FHttpResponsePtr& Response, bool bSuccess, FOnAuthResponse Callback);
     void HandleProfileResponse(const FHttpResponsePtr& Response, bool bSuccess, FOnProfileResponse Callback);
     void HandleSimpleResponse(const FHttpResponsePtr& Response, bool bSuccess, FOnSimpleResponse Callback);
+    void HandleProfileUpdateResponse(const FHttpResponsePtr& Response, bool bSuccess, FOnProfileUpdateResponse Callback);
+    void HandleAvatarUploadResponse(const FHttpResponsePtr& Response, bool bSuccess, FOnAvatarUploadResponse Callback);
     
     // JSON Parsing
     FAuthResponse ParseAuthResponse(const FString& JsonString);
     FUserProfile ParseUserProfile(const TSharedPtr<FJsonObject>& JsonObject);
+    FUserProfile ParseUserProfileFromResponse(const FString& JsonString);
     
 private:
     FString BaseUrl;

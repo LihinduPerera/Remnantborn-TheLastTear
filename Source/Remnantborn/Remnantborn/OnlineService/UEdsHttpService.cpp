@@ -88,7 +88,16 @@ void UEdsHttpService::GetProfile(const FString& UserId, const FString& AuthToken
         });
 }
 
-void UEdsHttpService::UpdateProfile(const FString& UserId, const FString& AuthToken, const FString& Username, const FString& Bio, FOnSimpleResponse Callback)
+void UEdsHttpService::GetMyProfile(const FString& AuthToken, FOnProfileResponse Callback)
+{
+    SendRequestWithAuth(TEXT("/profile/me"), TEXT("GET"), nullptr, AuthToken,
+        [this, Callback](const FHttpResponsePtr& Response, bool bSuccess)
+        {
+            HandleProfileResponse(Response, bSuccess, Callback);
+        });
+}
+
+void UEdsHttpService::UpdateProfile(const FString& UserId, const FString& AuthToken, const FString& Username, const FString& Bio, FOnProfileUpdateResponse Callback)
 {
     TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject());
     if (!Username.IsEmpty()) JsonObject->SetStringField(TEXT("username"), Username);
@@ -97,7 +106,30 @@ void UEdsHttpService::UpdateProfile(const FString& UserId, const FString& AuthTo
     SendRequestWithAuth(FString::Printf(TEXT("/profile/%s"), *UserId), TEXT("PUT"), JsonObject, AuthToken,
         [this, Callback](const FHttpResponsePtr& Response, bool bSuccess)
         {
-            HandleSimpleResponse(Response, bSuccess, Callback);
+            HandleProfileUpdateResponse(Response, bSuccess, Callback);
+        });
+}
+
+void UEdsHttpService::UpdateProfileWithAvatar(const FString& UserId, const FString& AuthToken, const FString& Username, const FString& Bio, const FString& AvatarUrl, FOnProfileUpdateResponse Callback)
+{
+    TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject());
+    if (!Username.IsEmpty()) JsonObject->SetStringField(TEXT("username"), Username);
+    if (!Bio.IsEmpty()) JsonObject->SetStringField(TEXT("bio"), Bio);
+    if (!AvatarUrl.IsEmpty()) JsonObject->SetStringField(TEXT("avatar_url"), AvatarUrl);
+    
+    SendRequestWithAuth(FString::Printf(TEXT("/profile/%s"), *UserId), TEXT("PUT"), JsonObject, AuthToken,
+        [this, Callback](const FHttpResponsePtr& Response, bool bSuccess)
+        {
+            HandleProfileUpdateResponse(Response, bSuccess, Callback);
+        });
+}
+
+void UEdsHttpService::UploadAvatar(const FString& AuthToken, const FString& FilePath, FOnAvatarUploadResponse Callback)
+{
+    SendMultipartRequest(TEXT("/profile/upload-avatar"), FilePath, TEXT("avatar"), AuthToken,
+        [this, Callback](const FHttpResponsePtr& Response, bool bSuccess)
+        {
+            HandleAvatarUploadResponse(Response, bSuccess, Callback);
         });
 }
 
@@ -267,6 +299,85 @@ void UEdsHttpService::SendRequestWithAuth(const FString& Endpoint, const FString
     }
 }
 
+void UEdsHttpService::SendMultipartRequest(const FString& Endpoint, const FString& FilePath, const FString& FieldName,
+                                          const FString& AuthToken, TFunction<void(const FHttpResponsePtr&, bool)> Callback)
+{
+    if (AuthToken.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Attempted multipart request without token"));
+        if (Callback)
+        {
+            FFunctionGraphTask::CreateAndDispatchWhenReady([Callback]()
+            {
+                Callback(nullptr, false);
+            }, TStatId(), nullptr, ENamedThreads::GameThread);
+        }
+        return;
+    }
+    
+    FHttpModule& HttpModule = FHttpModule::Get();
+    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = HttpModule.CreateRequest();
+    
+    FString FullUrl = BaseUrl + Endpoint;
+    Request->SetURL(FullUrl);
+    Request->SetVerb(TEXT("POST"));
+    Request->SetTimeout(30);
+    Request->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *AuthToken));
+    
+    // Read file content
+    TArray<uint8> FileData;
+    if (FFileHelper::LoadFileToArray(FileData, *FilePath))
+    {
+        FString FileName = FPaths::GetCleanFilename(FilePath);
+        FString ContentType = TEXT("application/octet-stream");
+        
+        if (FileName.EndsWith(TEXT(".png")) || FileName.EndsWith(TEXT(".PNG")))
+            ContentType = TEXT("image/png");
+        else if (FileName.EndsWith(TEXT(".jpg")) || FileName.EndsWith(TEXT(".jpeg")) || FileName.EndsWith(TEXT(".JPG")) || FileName.EndsWith(TEXT(".JPEG")))
+            ContentType = TEXT("image/jpeg");
+        else if (FileName.EndsWith(TEXT(".gif")))
+            ContentType = TEXT("image/gif");
+        
+        Request->SetHeader(TEXT("Content-Type"), ContentType);
+        Request->SetContent(FileData);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to read file: %s"), *FilePath);
+        if (Callback)
+        {
+            FFunctionGraphTask::CreateAndDispatchWhenReady([Callback]()
+            {
+                Callback(nullptr, false);
+            }, TStatId(), nullptr, ENamedThreads::GameThread);
+        }
+        return;
+    }
+    
+    Request->OnProcessRequestComplete().BindLambda([Callback](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bSuccess)
+    {
+        if (Callback)
+        {
+            FFunctionGraphTask::CreateAndDispatchWhenReady([Response, bSuccess, Callback]()
+            {
+                Callback(Response, bSuccess);
+            }, TStatId(), nullptr, ENamedThreads::GameThread);
+        }
+    });
+    
+    if (!Request->ProcessRequest())
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to process multipart HTTP request"));
+        if (Callback)
+        {
+            FFunctionGraphTask::CreateAndDispatchWhenReady([Callback]()
+            {
+                Callback(nullptr, false);
+            }, TStatId(), nullptr, ENamedThreads::GameThread);
+        }
+    }
+}
+
 void UEdsHttpService::HandleAuthResponse(const FHttpResponsePtr& Response, bool bSuccess, FOnAuthResponse Callback)
 {
     FAuthResponse AuthResponse;
@@ -322,14 +433,7 @@ void UEdsHttpService::HandleProfileResponse(const FHttpResponsePtr& Response, bo
     else if (Response->GetResponseCode() == 200)
     {
         FString ResponseContent = Response->GetContentAsString();
-        TSharedPtr<FJsonObject> JsonObject;
-        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseContent);
-        
-        if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
-        {
-            Profile = ParseUserProfile(JsonObject);
-            Profile.bIsValid = true;
-        }
+        Profile = ParseUserProfileFromResponse(ResponseContent);
     }
     
     if (Callback.IsBound())
@@ -345,6 +449,121 @@ void UEdsHttpService::HandleSimpleResponse(const FHttpResponsePtr& Response, boo
     if (Callback.IsBound())
     {
         Callback.Execute(bSuccessResult);
+    }
+}
+
+void UEdsHttpService::HandleProfileUpdateResponse(const FHttpResponsePtr& Response, bool bSuccess, FOnProfileUpdateResponse Callback)
+{
+    FProfileUpdateResponse UpdateResponse;
+    
+    if (!bSuccess || !Response.IsValid())
+    {
+        UpdateResponse.bSuccess = false;
+        UpdateResponse.ErrorMessage = TEXT("Network error");
+    }
+    else
+    {
+        FString ResponseContent = Response->GetContentAsString();
+        TSharedPtr<FJsonObject> JsonObject;
+        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseContent);
+        
+        if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
+        {
+            bool bSuccessFlag = false;
+            if (JsonObject->TryGetBoolField(TEXT("success"), bSuccessFlag))
+            {
+                UpdateResponse.bSuccess = bSuccessFlag;
+            }
+            else
+            {
+                UpdateResponse.bSuccess = (Response->GetResponseCode() == 200 || Response->GetResponseCode() == 201);
+            }
+            
+            // Get data object if present
+            const TSharedPtr<FJsonObject>* DataObjectPtr = nullptr;
+            if (JsonObject->TryGetObjectField(TEXT("data"), DataObjectPtr) && DataObjectPtr != nullptr)
+            {
+                const TSharedPtr<FJsonObject>& DataObject = *DataObjectPtr;
+                DataObject->TryGetStringField(TEXT("username"), UpdateResponse.Username);
+                DataObject->TryGetStringField(TEXT("avatar_url"), UpdateResponse.AvatarUrl);
+                DataObject->TryGetStringField(TEXT("bio"), UpdateResponse.Bio);
+            }
+            else
+            {
+                JsonObject->TryGetStringField(TEXT("username"), UpdateResponse.Username);
+                JsonObject->TryGetStringField(TEXT("avatar_url"), UpdateResponse.AvatarUrl);
+                JsonObject->TryGetStringField(TEXT("bio"), UpdateResponse.Bio);
+            }
+            
+            if (!UpdateResponse.bSuccess)
+            {
+                FString Message;
+                if (JsonObject->TryGetStringField(TEXT("message"), Message))
+                {
+                    UpdateResponse.ErrorMessage = Message;
+                }
+            }
+        }
+    }
+    
+    if (Callback.IsBound())
+    {
+        Callback.Execute(UpdateResponse);
+    }
+}
+
+void UEdsHttpService::HandleAvatarUploadResponse(const FHttpResponsePtr& Response, bool bSuccess, FOnAvatarUploadResponse Callback)
+{
+    FAvatarUploadResponse UploadResponse;
+    
+    if (!bSuccess || !Response.IsValid())
+    {
+        UploadResponse.bSuccess = false;
+        UploadResponse.ErrorMessage = TEXT("Network error");
+    }
+    else
+    {
+        FString ResponseContent = Response->GetContentAsString();
+        TSharedPtr<FJsonObject> JsonObject;
+        TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseContent);
+        
+        if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
+        {
+            bool bSuccessFlag = false;
+            if (JsonObject->TryGetBoolField(TEXT("success"), bSuccessFlag))
+            {
+                UploadResponse.bSuccess = bSuccessFlag;
+            }
+            else
+            {
+                UploadResponse.bSuccess = (Response->GetResponseCode() == 200 || Response->GetResponseCode() == 201);
+            }
+            
+            const TSharedPtr<FJsonObject>* DataObjectPtr = nullptr;
+            if (JsonObject->TryGetObjectField(TEXT("data"), DataObjectPtr) && DataObjectPtr != nullptr)
+            {
+                const TSharedPtr<FJsonObject>& DataObject = *DataObjectPtr;
+                DataObject->TryGetStringField(TEXT("avatar_url"), UploadResponse.AvatarUrl);
+            }
+            else
+            {
+                JsonObject->TryGetStringField(TEXT("avatar_url"), UploadResponse.AvatarUrl);
+            }
+            
+            if (!UploadResponse.bSuccess)
+            {
+                FString Message;
+                if (JsonObject->TryGetStringField(TEXT("message"), Message))
+                {
+                    UploadResponse.ErrorMessage = Message;
+                }
+            }
+        }
+    }
+    
+    if (Callback.IsBound())
+    {
+        Callback.Execute(UploadResponse);
     }
 }
 
@@ -456,6 +675,59 @@ FUserProfile UEdsHttpService::ParseUserProfile(const TSharedPtr<FJsonObject>& Js
     JsonObject->TryGetStringField(TEXT("avatar_url"), Profile.AvatarUrl);
     JsonObject->TryGetStringField(TEXT("bio"), Profile.Bio);
     JsonObject->TryGetStringField(TEXT("last_active"), Profile.LastActive);
+    JsonObject->TryGetStringField(TEXT("created_at"), Profile.CreatedAt);
+    JsonObject->TryGetStringField(TEXT("updated_at"), Profile.UpdatedAt);
+    
+    // Parse purchased items array
+    const TArray<TSharedPtr<FJsonValue>>* PurchasedItemsArray;
+    if (JsonObject->TryGetArrayField(TEXT("purchased_items"), PurchasedItemsArray))
+    {
+        for (const auto& Item : *PurchasedItemsArray)
+        {
+            FString ItemStr;
+            if (Item->TryGetString(ItemStr))
+            {
+                Profile.PurchasedItems.Add(ItemStr);
+            }
+        }
+    }
+    
+    return Profile;
+}
+
+FUserProfile UEdsHttpService::ParseUserProfileFromResponse(const FString& JsonString)
+{
+    FUserProfile Profile;
+    Profile.bIsValid = false;
+    
+    TSharedPtr<FJsonObject> JsonObject;
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+    
+    if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
+    {
+        bool bSuccess = false;
+        if (JsonObject->TryGetBoolField(TEXT("success"), bSuccess))
+        {
+            if (!bSuccess)
+            {
+                return Profile;
+            }
+        }
+        
+        // Get data object if present
+        const TSharedPtr<FJsonObject>* DataObjectPtr = nullptr;
+        if (JsonObject->TryGetObjectField(TEXT("data"), DataObjectPtr) && DataObjectPtr != nullptr)
+        {
+            Profile = ParseUserProfile(*DataObjectPtr);
+            Profile.bIsValid = true;
+        }
+        else
+        {
+            // Parse directly from root
+            Profile = ParseUserProfile(JsonObject);
+            Profile.bIsValid = true;
+        }
+    }
     
     return Profile;
 }

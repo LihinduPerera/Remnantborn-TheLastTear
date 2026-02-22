@@ -1,4 +1,5 @@
 const { supabase } = require('../config/database');
+const { cloudinary } = require('../config/cloudinary');
 const ApiResponse = require('../utils/response');
 
 class ProfileController {
@@ -41,6 +42,7 @@ class ProfileController {
         bio: profile.bio,
         created_at: profile.created_at,
         last_active: profile.last_active,
+        updated_at: profile.updated_at,
         purchased_items: purchasedItems
       };
       
@@ -48,6 +50,101 @@ class ProfileController {
       
     } catch (error) {
       console.error('Get profile error:', error);
+      return ApiResponse.serverError(res, 'Internal server error');
+    }
+  }
+  
+  // Get current user's profile
+  async getMyProfile(req, res) {
+    try {
+      const userId = req.user.id;
+      
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select(`
+          *,
+          purchases (
+            item_type,
+            item_id,
+            purchased_at
+          )
+        `)
+        .eq('user_id', userId)
+        .single();
+      
+      if (profileError || !profile) {
+        return ApiResponse.notFound(res, 'Profile not found');
+      }
+      
+      // Format purchased items
+      const purchasedItems = profile.purchases?.map(purchase => purchase.item_id) || [];
+      
+      const response = {
+        userId: profile.user_id,
+        username: profile.username,
+        level: profile.level,
+        remnant_count: profile.remnant_count,
+        avatar_url: profile.avatar_url,
+        bio: profile.bio,
+        created_at: profile.created_at,
+        last_active: profile.last_active,
+        updated_at: profile.updated_at,
+        purchased_items: purchasedItems
+      };
+      
+      return ApiResponse.success(res, response, 'Profile retrieved successfully');
+      
+    } catch (error) {
+      console.error('Get my profile error:', error);
+      return ApiResponse.serverError(res, 'Internal server error');
+    }
+  }
+  
+  // Upload avatar
+  async uploadAvatar(req, res) {
+    try {
+      const userId = req.user.id;
+      
+      if (!req.file) {
+        return ApiResponse.error(res, 'No file uploaded', 400);
+      }
+      
+      // Get current profile to check if there's an old avatar
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('avatar_url')
+        .eq('user_id', userId)
+        .single();
+      
+      // Delete old avatar from Cloudinary if it exists and is a Cloudinary URL
+      if (profile?.avatar_url && profile.avatar_url.includes('cloudinary')) {
+        try {
+          const publicId = profile.avatar_url.split('/').pop().split('.')[0];
+          await cloudinary.uploader.destroy(`remnantborn/avatars/${publicId}`);
+        } catch (deleteError) {
+          console.error('Error deleting old avatar:', deleteError);
+        }
+      }
+      
+      // Update profile with new avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ 
+          avatar_url: req.file.path,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId);
+      
+      if (updateError) {
+        return ApiResponse.error(res, `Failed to update avatar: ${updateError.message}`, 400);
+      }
+      
+      return ApiResponse.success(res, {
+        avatar_url: req.file.path
+      }, 'Avatar uploaded successfully');
+      
+    } catch (error) {
+      console.error('Upload avatar error:', error);
       return ApiResponse.serverError(res, 'Internal server error');
     }
   }
@@ -107,7 +204,14 @@ class ProfileController {
         return ApiResponse.error(res, `Failed to update profile: ${error.message}`, 400);
       }
       
-      return ApiResponse.success(res, { success: true }, 'Profile updated successfully');
+      // Get updated profile to return
+      const { data: updatedProfile } = await supabase
+        .from('profiles')
+        .select('username, avatar_url, bio, updated_at')
+        .eq('user_id', userId)
+        .single();
+      
+      return ApiResponse.success(res, updatedProfile, 'Profile updated successfully');
       
     } catch (error) {
       console.error('Update profile error:', error);
