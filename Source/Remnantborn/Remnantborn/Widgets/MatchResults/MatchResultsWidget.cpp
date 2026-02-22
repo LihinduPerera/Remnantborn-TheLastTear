@@ -99,29 +99,48 @@ void UMatchResultsWidget::OnMatchStateChanged(EMatchState NewState)
             break;
 
         case EMatchState::Finished:
-            // Start the auto-show timer
-            bShouldAutoShow = true;
-            TimeSinceMatchEnd = 0.0f;
-            
-            // Play result music - this works on both host and client
-            // because each client has their own GameInstance
-            if (UMyOnlineGameInstance* GameInstance = GetGameInstance<UMyOnlineGameInstance>())
             {
-                const bool bLocalPlayerIsWinner = IsLocalPlayerWinner();
-                bool bIsLocal = GetOwningPlayer() ? GetOwningPlayer()->IsLocalController() : false;
-                UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Playing result music. IsWinner: %d, IsLocal=%d"), 
-                    bLocalPlayerIsWinner, bIsLocal);
-                GameInstance->OnMatchEnded(bLocalPlayerIsWinner);
+                // Start the auto-show timer
+                bShouldAutoShow = true;
+                TimeSinceMatchEnd = 0.0f;
+                
+                // Play result music - this works on both host and client
+                // because each client has their own GameInstance
+                // Use GetWorld()->GetGameInstance() for more reliable access on clients
+                UGameInstance* WorldGameInstance = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
+                UMyOnlineGameInstance* GameInstance = WorldGameInstance ? Cast<UMyOnlineGameInstance>(WorldGameInstance) : nullptr;
+                
+                if (GameInstance)
+                {
+                    const bool bLocalPlayerIsWinner = IsLocalPlayerWinner();
+                    bool bIsLocal = GetOwningPlayer() ? GetOwningPlayer()->IsLocalController() : false;
+                    UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Playing result music. IsWinner: %d, IsLocal=%d"), 
+                        bLocalPlayerIsWinner, bIsLocal);
+                    GameInstance->OnMatchEnded(bLocalPlayerIsWinner);
+                }
+                else
+                {
+                    bool bIsLocal = GetOwningPlayer() ? GetOwningPlayer()->IsLocalController() : false;
+                    UE_LOG(LogTemp, Error, TEXT("MatchResultsWidget: Could not get GameInstance! IsLocal=%d, HasWorld=%d"), 
+                        bIsLocal, GetWorld() != nullptr);
+                    
+                    // Try fallback methods
+                    GameInstance = GetGameInstance<UMyOnlineGameInstance>();
+                    if (GameInstance)
+                    {
+                        UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Got GameInstance via GetGameInstance fallback"));
+                        const bool bLocalPlayerIsWinner = IsLocalPlayerWinner();
+                        GameInstance->OnMatchEnded(bLocalPlayerIsWinner);
+                    }
+                    else
+                    {
+                        UE_LOG(LogTemp, Error, TEXT("MatchResultsWidget: All GameInstance retrieval methods failed!"));
+                    }
+                }
+                
+                // Update the results display
+                UpdateResultsDisplay();
             }
-            else
-            {
-                bool bIsLocal = GetOwningPlayer() ? GetOwningPlayer()->IsLocalController() : false;
-                UE_LOG(LogTemp, Error, TEXT("MatchResultsWidget: Could not get GameInstance! IsLocal=%d"), 
-                    bIsLocal);
-            }
-            
-            // Update the results display
-            UpdateResultsDisplay();
             break;
 
         case EMatchState::ReturningToLobby:

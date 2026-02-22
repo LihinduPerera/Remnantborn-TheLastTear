@@ -32,6 +32,13 @@ void ALobbyGameMode::BeginPlay()
     {
         CharacterSubsystem->LoadAvailableCharacters();
     }
+
+    // Notify GameInstance that we've entered the lobby - this ensures music continues seamlessly
+    if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
+    {
+        GameInstance->OnEnteredLobby();
+        UE_LOG(LogTemp, Log, TEXT("LobbyGameMode: Called OnEnteredLobby to continue music"));
+    }
 }
 
 void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)

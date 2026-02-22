@@ -1,4 +1,5 @@
 #include "MainMenuGameMode.h"
+#include "Remnantborn/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 #include "Remnantborn/Remnantborn/Widgets/MainMenuWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/PlayerController.h"
@@ -15,6 +16,13 @@ AMainMenuGameMode::AMainMenuGameMode()
 void AMainMenuGameMode::BeginPlay()
 {
     Super::BeginPlay();
+    
+    // Start menu music when the main menu loads
+    if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
+    {
+        GameInstance->StartBackgroundMusic();
+        UE_LOG(LogTemp, Log, TEXT("MainMenuGameMode: Started background music"));
+    }
     
     if (MainMenuWidgetClass)
     {

@@ -66,70 +66,111 @@ void UMyOnlineGameInstance::Init()
 void UMyOnlineGameInstance::OnStart()
 {
     Super::OnStart();
-    
+
     if (!GetWorld())
     {
         UE_LOG(LogTemp, Error, TEXT("MusicSystem: OnStart - No World!"));
         return;
     }
-    
+
     if (!bAutoPlayOnLevelChange)
     {
         UE_LOG(LogTemp, Warning, TEXT("MusicSystem: AutoPlay is disabled!"));
         return;
     }
-    
+
     FString CurrentMapName = GetWorld()->GetMapName();
     CurrentMapName.RemoveFromStart(GetWorld()->StreamingLevelsPrefix);
-    
-    UE_LOG(LogTemp, Log, TEXT("MusicSystem: OnStart - Map=%s, PendingState=%d, InMatch=%d, MatchEnded=%d, PlaylistSize=%d"), 
-        *CurrentMapName, (int32)PendingMusicState, bIsInMatch, bMatchHasEnded, GameplayPlaylist.Num());
-    
+
+    UE_LOG(LogTemp, Log, TEXT("MusicSystem: OnStart - Map=%s, CurrentState=%d, InMatch=%d, MatchEnded=%d, IsPlaying=%d"),
+        *CurrentMapName, (int32)CurrentMusicState, bIsInMatch, bMatchHasEnded, IsMusicPlaying());
+
     // Determine map type
     bool bIsMenuMap = CurrentMapName.Contains(TEXT("Menu")) || CurrentMapName.Contains(TEXT("Lobby"));
     bool bIsGameMap = !bIsMenuMap && !CurrentMapName.Contains(TEXT("Entry"));
-    
-    UE_LOG(LogTemp, Log, TEXT("MusicSystem: bIsMenuMap=%d, bIsGameMap=%d"), bIsMenuMap, bIsGameMap);
-    
-    // Priority 1: Match has ended - play result music
-    if (bMatchHasEnded)
+
+    // Check if audio component is valid in current world - if not, we need to restart music
+    bool bNeedsRestart = false;
+    if (MusicAudioComponent && MusicAudioComponent->IsValidLowLevel())
     {
-        UE_LOG(LogTemp, Log, TEXT("MusicSystem: Match ended - playing result music"));
-        bMatchHasEnded = false;
-        CurrentMusicState = EMusicState::Result;
-        PlayResultMusic(true);
-    }
-    // Priority 2: We're in a match (host started match from lobby)
-    else if (bIsInMatch && bIsGameMap)
-    {
-        UE_LOG(LogTemp, Log, TEXT("MusicSystem: In match - playing gameplay music"));
-        CurrentMusicState = EMusicState::Gameplay;
-        PlayGameplayMusic();
-    }
-    // Priority 3: Menu/Lobby maps - always play menu music
-    else if (bIsMenuMap)
-    {
-        UE_LOG(LogTemp, Log, TEXT("MusicSystem: Menu/Lobby map - playing menu music"));
-        bIsInMatch = false;
-        bMatchHasEnded = false;
-        PendingMusicState = EMusicState::Menu;
-        CurrentMusicState = EMusicState::Menu;
-        PlayMenuMusic();
-    }
-    // Priority 4: Game map but not flagged as in match - play gameplay music
-    else if (bIsGameMap)
-    {
-        UE_LOG(LogTemp, Log, TEXT("MusicSystem: Game map - playing gameplay music"));
-        bIsInMatch = true;
-        CurrentMusicState = EMusicState::Gameplay;
-        PlayGameplayMusic();
+        if (MusicAudioComponent->GetWorld() != GetWorld())
+        {
+            UE_LOG(LogTemp, Log, TEXT("MusicSystem: Audio component is from old world, needs restart"));
+            bNeedsRestart = true;
+        }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("MusicSystem: Unknown map type, playing menu music"));
-        PlayMenuMusic();
+        bNeedsRestart = true;
+    }
+
+    // Priority 1: Match has ended - play result music (for both host and clients)
+    if (bMatchHasEnded && CurrentMusicState == EMusicState::Result)
+    {
+        UE_LOG(LogTemp, Log, TEXT("MusicSystem: Match ended state detected - ensuring result music is playing"));
+        // Music should already be playing from OnMatchEnded, but ensure it's running
+        if (!IsMusicPlaying() || bNeedsRestart)
+        {
+            PlayResultMusic(true);
+        }
+    }
+    // Priority 2: In a match on a game map - play/continue gameplay music
+    else if (bIsInMatch && bIsGameMap && CurrentMusicState == EMusicState::Gameplay)
+    {
+        UE_LOG(LogTemp, Log, TEXT("MusicSystem: In match on game map - ensuring gameplay music is playing"));
+        // Gameplay music should have been started by OnMatchStarted, but check if it's playing
+        if (!IsMusicPlaying() || bNeedsRestart)
+        {
+            PlayGameplayMusic();
+        }
+    }
+    // Priority 3: Menu/Lobby maps - play menu music
+    else if (bIsMenuMap)
+    {
+        UE_LOG(LogTemp, Log, TEXT("MusicSystem: Menu/Lobby map detected"));
+        bIsInMatch = false;
+        bMatchHasEnded = false;
+
+        // Play menu music if not playing or needs restart
+        if (!IsMusicPlaying() || bNeedsRestart)
+        {
+            CurrentMusicState = EMusicState::Menu;
+            PlayMenuMusic();
+        }
+        else
+        {
+            CurrentMusicState = EMusicState::Menu;
+        }
+    }
+    // Priority 4: Catch-all - if we need to restart but don't know the state, use the current state
+    else if (bNeedsRestart && CurrentMusicState != EMusicState::None)
+    {
+        UE_LOG(LogTemp, Log, TEXT("MusicSystem: Catch-all - restarting music with current state"));
+        switch (CurrentMusicState)
+        {
+            case EMusicState::Menu:
+                PlayMenuMusic();
+                break;
+            case EMusicState::Gameplay:
+                PlayGameplayMusic();
+                break;
+            case EMusicState::Result:
+                PlayResultMusic(true);
+                break;
+            default:
+                // Default to menu music
+                CurrentMusicState = EMusicState::Menu;
+                PlayMenuMusic();
+                break;
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("MusicSystem: Unexpected state - Map=%s, IsMenuMap=%d, IsGameMap=%d, InMatch=%d"),
+            *CurrentMapName, bIsMenuMap, bIsGameMap, bIsInMatch);
     }
 }
+
 
 void UMyOnlineGameInstance::Shutdown()
 {
@@ -236,20 +277,23 @@ void UMyOnlineGameInstance::OnCreateSessionComplete(FName SessionName, bool bSuc
     {
         SessionInterface->ClearOnCreateSessionCompleteDelegate_Handle(CreateSessionCompleteDelegateHandle);
     }
-    
+
     if (bSuccess)
     {
         UE_LOG(LogTemp, Log, TEXT("Session created successfully: %s"), *SessionName.ToString());
         bIsHosting = true;
         OnCreateSessionSuccess.Broadcast();
-        
+
         // Travel to the LOBBY map instead of game map
         if (!LobbyMapPath.IsEmpty())
         {
+            // Prepare for travel - preserves music state seamlessly
+            PrepareForLevelTravel();
+
             FString TravelPath = LobbyMapPath;
             TravelPath.RemoveFromStart(GetWorld()->StreamingLevelsPrefix);
             TravelPath += TEXT("?listen");
-            
+
             UE_LOG(LogTemp, Log, TEXT("Server traveling to lobby: %s"), *TravelPath);
             GetWorld()->ServerTravel(TravelPath);
         }
@@ -515,6 +559,11 @@ void UMyOnlineGameInstance::TravelToServer(const FString& Address)
 {
     PrepareForLevelTravel();
     
+    // Set music state for client joining a game - they should play gameplay music
+    bIsInMatch = true;
+    bMatchHasEnded = false;
+    CurrentMusicState = EMusicState::Gameplay;
+    
     APlayerController* PlayerController = GetFirstLocalPlayerController();
     if (PlayerController)
     {
@@ -524,7 +573,7 @@ void UMyOnlineGameInstance::TravelToServer(const FString& Address)
         PlayerController->SetShowMouseCursor(false);
         PlayerController->bShowMouseCursor = false;
         
-        UE_LOG(LogTemp, Log, TEXT("Client traveling to: %s"), *Address);
+        UE_LOG(LogTemp, Log, TEXT("Client traveling to: %s - will play gameplay music on arrival"), *Address);
         PlayerController->ClientTravel(Address, TRAVEL_Absolute);
     }
     else
@@ -588,19 +637,20 @@ void UMyOnlineGameInstance::OnDestroySessionComplete(FName SessionName, bool bSu
 void UMyOnlineGameInstance::LeaveGame()
 {
     PrepareForLevelTravel();
-    
+
     // If we're hosting, destroy the session
     if (bIsHosting)
     {
         DestroySession();
     }
-    
-    // Switch to menu music and return to main menu
+
+    // Reset music state for menu
     bIsInMatch = false;
     bMatchHasEnded = false;
-    PendingMusicState = EMusicState::Menu;
     CurrentMusicState = EMusicState::Menu;
-    
+
+    UE_LOG(LogTemp, Log, TEXT("LeaveGame: Returning to main menu with music state reset"));
+
     // Return to main menu
     UGameplayStatics::OpenLevel(this, FName("/Game/Remnantborn/Levels/MainMenu"), true);
 }
@@ -1166,14 +1216,25 @@ void UMyOnlineGameInstance::PlayNextTrack()
     {
         return;
     }
-    
+
     UWorld* World = GetMusicWorld();
     if (!World)
     {
         UE_LOG(LogTemp, Error, TEXT("BackgroundMusic: No world found in PlayNextTrack"));
-        return;
+        
+        // Try to get world from context - audio component might need to be recreated after travel
+        if (GEngine)
+        {
+            World = GEngine->GetWorldFromContextObject(this, EGetWorldErrorMode::ReturnNull);
+        }
+        
+        if (!World)
+        {
+            UE_LOG(LogTemp, Error, TEXT("BackgroundMusic: Still no world found, cannot play track"));
+            return;
+        }
     }
-    
+
     USoundCue* CurrentTrack = (*CurrentPlaylist)[CurrentTrackIndex];
     if (!CurrentTrack)
     {
@@ -1182,19 +1243,31 @@ void UMyOnlineGameInstance::PlayNextTrack()
         PlayNextTrack();
         return;
     }
-    
-    // Clean up previous component
-    if (MusicAudioComponent)
+
+    // Clean up previous component - check if it's still valid first
+    if (MusicAudioComponent && MusicAudioComponent->IsValidLowLevel())
     {
-        MusicAudioComponent->Stop();
-        MusicAudioComponent->OnAudioFinished.Clear();
-        MusicAudioComponent->DestroyComponent();
-        MusicAudioComponent = nullptr;
+        // Check if the component is in a valid world
+        if (MusicAudioComponent->GetWorld() != World || !MusicAudioComponent->GetWorld())
+        {
+            // Audio component is from old world, destroy it
+            UE_LOG(LogTemp, Log, TEXT("BackgroundMusic: Audio component from old world, cleaning up"));
+            MusicAudioComponent->OnAudioFinished.Clear();
+            MusicAudioComponent->DestroyComponent();
+            MusicAudioComponent = nullptr;
+        }
+        else if (MusicAudioComponent->IsPlaying())
+        {
+            MusicAudioComponent->Stop();
+            MusicAudioComponent->OnAudioFinished.Clear();
+            MusicAudioComponent->DestroyComponent();
+            MusicAudioComponent = nullptr;
+        }
     }
-    
-    // Spawn new 2D sound
+
+    // Spawn new 2D sound in current world
     MusicAudioComponent = UGameplayStatics::SpawnSound2D(World, CurrentTrack, MusicVolume);
-    
+
     if (MusicAudioComponent)
     {
         MusicAudioComponent->OnAudioFinished.AddDynamic(this, &UMyOnlineGameInstance::OnTrackFinished);
@@ -1235,81 +1308,83 @@ void UMyOnlineGameInstance::OnTrackFinished()
 
 void UMyOnlineGameInstance::PrepareForLevelTravel()
 {
-    UE_LOG(LogTemp, Log, TEXT("MusicSystem: PrepareForLevelTravel - CurrentState=%d"), (int32)CurrentMusicState);
-    
+    UE_LOG(LogTemp, Log, TEXT("MusicSystem: PrepareForLevelTravel - CurrentState=%d, IsPlaying=%d"),
+        (int32)CurrentMusicState, IsMusicPlaying());
+
     bMusicWasPlayingBeforeTravel = IsMusicPlaying();
-    
-    if (MusicAudioComponent)
-    {
-        MusicAudioComponent->Stop();
-    }
+
+    // Don't stop music here - let it continue seamlessly through travel
+    // Only stop it explicitly if needed for specific transitions
 }
 
 void UMyOnlineGameInstance::OnEnteredLobby()
 {
-    UE_LOG(LogTemp, Log, TEXT("MusicSystem: OnEnteredLobby - WasPlaying=%d"), bMusicWasPlayingBeforeTravel);
-    
+    UE_LOG(LogTemp, Log, TEXT("MusicSystem: OnEnteredLobby"));
+
     bIsInMatch = false;
     bMatchHasEnded = false;
-    PendingMusicState = EMusicState::Menu;
-    
-    if (bMusicWasPlayingBeforeTravel || CurrentMusicState == EMusicState::Menu)
-    {
-        CurrentMusicState = EMusicState::Menu;
-        PlayMenuMusic();
-    }
-    else
-    {
-        CurrentMusicState = EMusicState::Menu;
-        PlayMenuMusic();
-    }
+    CurrentMusicState = EMusicState::Menu;
+
+    // Play menu music immediately when entering lobby
+    // This ensures music continues through seamless travel from main menu
+    PlayMenuMusic();
+
+    UE_LOG(LogTemp, Log, TEXT("MusicSystem: Menu music started in lobby"));
 }
 
 void UMyOnlineGameInstance::OnMatchStarted()
 {
-    UE_LOG(LogTemp, Log, TEXT("MusicSystem: OnMatchStarted"));
-    
+    UE_LOG(LogTemp, Log, TEXT("MusicSystem: OnMatchStarted - playing gameplay music immediately"));
+
     bIsInMatch = true;
     bMatchHasEnded = false;
-    PendingMusicState = EMusicState::Gameplay;
-    
     CurrentMusicState = EMusicState::Gameplay;
+
+    // Play gameplay music IMMEDIATELY - don't wait for OnStart()
+    // This ensures music continues through seamless travel from lobby to game
     PlayGameplayMusic();
+
+    UE_LOG(LogTemp, Log, TEXT("MusicSystem: Gameplay music started"));
 }
 
 void UMyOnlineGameInstance::OnMatchEnded(bool bIsVictory)
 {
     UE_LOG(LogTemp, Log, TEXT("MusicSystem: OnMatchEnded - Victory=%d"), bIsVictory);
-    
+
     bIsInMatch = false;
     bMatchHasEnded = true;
-    PendingMusicState = EMusicState::Result;
-    
     CurrentMusicState = EMusicState::Result;
+
+    // Play result music immediately for all players (host and clients)
     PlayResultMusic(bIsVictory);
+
+    UE_LOG(LogTemp, Log, TEXT("MusicSystem: Result music should now be playing on all clients"));
 }
 
 void UMyOnlineGameInstance::OnReturningToLobby()
 {
     UE_LOG(LogTemp, Log, TEXT("MusicSystem: OnReturningToLobby"));
-    
+
     bIsInMatch = false;
     bMatchHasEnded = false;
-    PendingMusicState = EMusicState::Menu;
-    
     CurrentMusicState = EMusicState::Menu;
-    PlayMenuMusic();
+
+    // Stop current music first - we'll restart it after travel completes
+    StopBackgroundMusic();
+
+    // Note: We don't play music here immediately because we're about to travel to a new level
+    // The lobby's OnEnteredLobby() or OnStart() will handle playing menu music after the level loads
+    UE_LOG(LogTemp, Log, TEXT("MusicSystem: Returning to lobby - music will play after level loads"));
 }
 
 void UMyOnlineGameInstance::ResumeMenuMusic()
 {
     UE_LOG(LogTemp, Log, TEXT("MusicSystem: ResumeMenuMusic"));
-    
+
     bIsInMatch = false;
     bMatchHasEnded = false;
-    PendingMusicState = EMusicState::Menu;
-    
     CurrentMusicState = EMusicState::Menu;
+
     PlayMenuMusic();
 }
 
