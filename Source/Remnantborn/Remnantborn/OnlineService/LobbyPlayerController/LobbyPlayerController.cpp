@@ -27,6 +27,14 @@ void ALobbyPlayerController::BeginPlay()
         // Check if player has a character selected, if not show character selection
         FTimerHandle CharacterCheckTimer;
         GetWorld()->GetTimerManager().SetTimer(CharacterCheckTimer, this, &ALobbyPlayerController::CheckAndShowCharacterSelection, 1.0f, false);
+
+        // Trigger lobby music on local client's GameInstance
+        // This ensures each player hears music locally, regardless of whether they're host or client
+        if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
+        {
+            GameInstance->OnEnteredLobby();
+            UE_LOG(LogTemp, Log, TEXT("LobbyPlayerController: Started lobby music for local player"));
+        }
     }
 }
 

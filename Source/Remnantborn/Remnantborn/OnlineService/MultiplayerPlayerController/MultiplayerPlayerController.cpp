@@ -15,6 +15,14 @@ void AMultiplayerPlayerController::BeginPlay()
 	if (IsLocalPlayerController())
 	{
 		InitializeHUD();
+
+		// Trigger gameplay music on local client's GameInstance
+		// This ensures each player hears music locally when they enter gameplay
+		if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
+		{
+			GameInstance->OnMatchStarted();
+			UE_LOG(LogTemp, Log, TEXT("MultiplayerPlayerController: Started gameplay music for local player"));
+		}
 	}
 }
 
