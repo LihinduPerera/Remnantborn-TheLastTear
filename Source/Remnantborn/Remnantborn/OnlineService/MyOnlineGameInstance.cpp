@@ -16,7 +16,10 @@ UMyOnlineGameInstance::UMyOnlineGameInstance()
     bIsLoggedIn = false;
     LobbyMapPath = TEXT("/Game/Remnantborn/Levels/Lobby");
     
-    MusicVolume = 0.5f;
+    MenuMusicVolume = 0.5f;
+    GameplayMusicVolume = 0.5f;
+    ResultMusicVolume = 0.5f;
+    MusicVolume = 0.5f; // Legacy
     bShufflePlaylist = true;
     bAutoPlayOnLevelChange = true;
     CurrentTrackIndex = 0;
@@ -1196,13 +1199,64 @@ void UMyOnlineGameInstance::StopBackgroundMusic()
 void UMyOnlineGameInstance::SetMusicVolume(float Volume)
 {
     MusicVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
+    MenuMusicVolume = MusicVolume;
+    GameplayMusicVolume = MusicVolume;
+    ResultMusicVolume = MusicVolume;
     
     if (MusicAudioComponent)
     {
-        MusicAudioComponent->SetVolumeMultiplier(MusicVolume);
+        // Apply volume based on current music state
+        switch (CurrentMusicState)
+        {
+            case EMusicState::Menu:
+                MusicAudioComponent->SetVolumeMultiplier(MenuMusicVolume);
+                break;
+            case EMusicState::Gameplay:
+                MusicAudioComponent->SetVolumeMultiplier(GameplayMusicVolume);
+                break;
+            case EMusicState::Result:
+                MusicAudioComponent->SetVolumeMultiplier(ResultMusicVolume);
+                break;
+            default:
+                MusicAudioComponent->SetVolumeMultiplier(MusicVolume);
+                break;
+        }
     }
     
-    UE_LOG(LogTemp, Log, TEXT("BackgroundMusic: Volume set to %f"), MusicVolume);
+    UE_LOG(LogTemp, Log, TEXT("BackgroundMusic: Volume set to %f (all music types)"), MusicVolume);
+}
+
+void UMyOnlineGameInstance::SetMenuMusicVolume(float Volume)
+{
+    MenuMusicVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
+    UE_LOG(LogTemp, Log, TEXT("BackgroundMusic: Menu volume set to %f"), MenuMusicVolume);
+    
+    if (CurrentMusicState == EMusicState::Menu && MusicAudioComponent)
+    {
+        MusicAudioComponent->SetVolumeMultiplier(MenuMusicVolume);
+    }
+}
+
+void UMyOnlineGameInstance::SetGameplayMusicVolume(float Volume)
+{
+    GameplayMusicVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
+    UE_LOG(LogTemp, Log, TEXT("BackgroundMusic: Gameplay volume set to %f"), GameplayMusicVolume);
+    
+    if (CurrentMusicState == EMusicState::Gameplay && MusicAudioComponent)
+    {
+        MusicAudioComponent->SetVolumeMultiplier(GameplayMusicVolume);
+    }
+}
+
+void UMyOnlineGameInstance::SetResultMusicVolume(float Volume)
+{
+    ResultMusicVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
+    UE_LOG(LogTemp, Log, TEXT("BackgroundMusic: Result volume set to %f"), ResultMusicVolume);
+    
+    if (CurrentMusicState == EMusicState::Result && MusicAudioComponent)
+    {
+        MusicAudioComponent->SetVolumeMultiplier(ResultMusicVolume);
+    }
 }
 
 bool UMyOnlineGameInstance::IsMusicPlaying() const
@@ -1265,8 +1319,26 @@ void UMyOnlineGameInstance::PlayNextTrack()
         }
     }
 
+    // Determine the appropriate volume based on current music state
+    float CurrentVolume = MusicVolume;
+    switch (CurrentMusicState)
+    {
+        case EMusicState::Menu:
+            CurrentVolume = MenuMusicVolume;
+            break;
+        case EMusicState::Gameplay:
+            CurrentVolume = GameplayMusicVolume;
+            break;
+        case EMusicState::Result:
+            CurrentVolume = ResultMusicVolume;
+            break;
+        default:
+            CurrentVolume = MenuMusicVolume;
+            break;
+    }
+
     // Spawn new 2D sound in current world
-    MusicAudioComponent = UGameplayStatics::SpawnSound2D(World, CurrentTrack, MusicVolume);
+    MusicAudioComponent = UGameplayStatics::SpawnSound2D(World, CurrentTrack, CurrentVolume);
 
     if (MusicAudioComponent)
     {

@@ -136,8 +136,26 @@ public:
     UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
     void SetMusicVolume(float Volume);
     
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void SetMenuMusicVolume(float Volume);
+
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void SetGameplayMusicVolume(float Volume);
+
+    UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
+    void SetResultMusicVolume(float Volume);
+    
     UFUNCTION(BlueprintPure, Category = "BackgroundMusic")
-    float GetMusicVolume() const { return MusicVolume; }
+    float GetMusicVolume() const { return MenuMusicVolume; }
+
+    UFUNCTION(BlueprintPure, Category = "BackgroundMusic")
+    float GetMenuMusicVolume() const { return MenuMusicVolume; }
+
+    UFUNCTION(BlueprintPure, Category = "BackgroundMusic")
+    float GetGameplayMusicVolume() const { return GameplayMusicVolume; }
+
+    UFUNCTION(BlueprintPure, Category = "BackgroundMusic")
+    float GetResultMusicVolume() const { return ResultMusicVolume; }
     
     UFUNCTION(BlueprintPure, Category = "BackgroundMusic")
     bool IsMusicPlaying() const;
@@ -257,6 +275,16 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
     TArray<USoundCue*> ResultPlaylist;
     
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
+    float MenuMusicVolume = 0.5f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
+    float GameplayMusicVolume = 0.5f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
+    float ResultMusicVolume = 0.5f;
+
+    // Legacy - kept for backward compatibility
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
     float MusicVolume = 0.5f;
     
