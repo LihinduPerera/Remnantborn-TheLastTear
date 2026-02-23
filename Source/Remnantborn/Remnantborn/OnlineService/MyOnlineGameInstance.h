@@ -7,6 +7,7 @@
 #include "FindSessionsCallbackProxy.h"
 #include "UEdsHttpService.h"
 #include "Components/AudioComponent.h"
+#include "Sound/SoundCue.h"
 #include "MyOnlineGameInstance.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSessionSearchCompleted, bool, bSuccess);
@@ -23,16 +24,16 @@ struct FSessionInfo
     GENERATED_BODY()
     
     UPROPERTY(BlueprintReadOnly)
+    int32 CurrentPlayers = 0;
+    
+    UPROPERTY(BlueprintReadOnly)
+    int32 MaxPlayers = 0;
+    
+    UPROPERTY(BlueprintReadOnly)
+    int32 Ping = 0;
+    
+    UPROPERTY(BlueprintReadOnly)
     FString SessionName;
-    
-    UPROPERTY(BlueprintReadOnly)
-    int32 CurrentPlayers;
-    
-    UPROPERTY(BlueprintReadOnly)
-    int32 MaxPlayers;
-    
-    UPROPERTY(BlueprintReadOnly)
-    int32 Ping;
     
     UPROPERTY(BlueprintReadOnly)
     FBlueprintSessionResult SessionResult;
