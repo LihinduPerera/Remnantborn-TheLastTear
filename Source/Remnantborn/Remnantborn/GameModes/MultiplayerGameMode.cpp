@@ -4,6 +4,7 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerStart.h"
+#include "Misc/DateTime.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayTagContainer.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterPlayerState.h"
@@ -526,6 +527,7 @@ void AMultiplayerGameMode::InitializeMatchTracking()
     AMultiplayerMatchGameState* MatchGameState = GetGameState<AMultiplayerMatchGameState>();
     if (MatchGameState)
     {
+        bRewardsDispatched = false;
         MatchGameState->InitializePlayerResults();
         UE_LOG(LogTemp, Log, TEXT("MultiplayerGameMode: Match tracking initialized for %d players"), 
             MatchGameState->PlayerResults.Num());
@@ -586,17 +588,43 @@ void AMultiplayerGameMode::NotifyPlayerDied(APlayerController* PlayerController)
     // Check if match is finished and show results to all players
     if (MatchGameState->IsMatchFinished())
     {
+        if (bRewardsDispatched)
+        {
+            return;
+        }
+
+        bRewardsDispatched = true;
         UE_LOG(LogTemp, Log, TEXT("MultiplayerGameMode: Match finished, showing results to all players in 2 seconds..."));
         
         // Use a timer to show results after a short delay (allows for death animations)
         FTimerHandle ShowResultsTimer;
         GetWorld()->GetTimerManager().SetTimer(ShowResultsTimer, [this]()
         {
+            AMultiplayerMatchGameState* LocalMatchGameState = GetGameState<AMultiplayerMatchGameState>();
+            const float MatchDuration = LocalMatchGameState ? LocalMatchGameState->GetMatchDuration() : 0.0f;
+            const FString MatchId = FString::Printf(TEXT("%s-%lld"),
+                *UGameplayStatics::GetCurrentLevelName(this),
+                FDateTime::UtcNow().ToUnixTimestamp());
+
             // Show match results to all players
             for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
             {
                 if (AMultiplayerPlayerController* PC = Cast<AMultiplayerPlayerController>(It->Get()))
                 {
+                    bool bIsWinner = false;
+                    int32 EliminationOrder = 0;
+
+                    if (LocalMatchGameState)
+                    {
+                        if (ACharacterPlayerState* CharacterPlayerState = PC->GetPlayerState<ACharacterPlayerState>())
+                        {
+                            const FPlayerMatchResult Result = LocalMatchGameState->GetPlayerResult(CharacterPlayerState->GetPlayerName());
+                            bIsWinner = Result.bIsWinner;
+                            EliminationOrder = Result.EliminationOrder;
+                        }
+                    }
+
+                    PC->Client_SubmitMatchReward(bIsWinner, MatchDuration, EliminationOrder, MatchId);
                     PC->Client_ShowMatchResults();
                 }
             }

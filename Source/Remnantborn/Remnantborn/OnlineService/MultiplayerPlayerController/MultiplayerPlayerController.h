@@ -6,6 +6,8 @@
 #include "Remnantborn/Remnantborn/GameModes/MultiplayerMatchGameState.h"
 #include "MultiplayerPlayerController.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnLocalMatchRewardProcessed, bool, bIsWinner, int32, EliminationOrder);
+
 UCLASS()
 class REMNANTBORN_API AMultiplayerPlayerController : public APlayerController
 {
@@ -46,6 +48,12 @@ UFUNCTION(Client, Reliable)
 	 */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_NotifyCharacterSelection(FName CharacterID);
+
+	UFUNCTION(Client, Reliable)
+	void Client_SubmitMatchReward(bool bIsWinner, float MatchDuration, int32 EliminationOrder, const FString& MatchId);
+
+	UPROPERTY(BlueprintAssignable, Category = "Match|Events")
+	FOnLocalMatchRewardProcessed OnLocalMatchRewardProcessed;
 
 private:
 	void SetupInputMode();

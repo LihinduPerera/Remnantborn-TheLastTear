@@ -111,12 +111,125 @@ struct FAvatarUploadResponse
     FString ErrorMessage;
 };
 
+USTRUCT(BlueprintType)
+struct FStoreCharacterInfo
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    FString ItemId;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    FString Name;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    FString Description;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    int32 Price = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    FString ImageUrl;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    bool bOwned = false;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    bool bCanAfford = false;
+};
+
+USTRUCT(BlueprintType)
+struct FRemnantPackage
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    FString PackageId;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    FString Name;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    int32 RemnantAmount = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    FString DisplayPrice;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    int32 SortOrder = 0;
+};
+
+USTRUCT(BlueprintType)
+struct FCharacterPurchaseResponse
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    bool bSuccess = false;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    FString CharacterId;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    int32 NewRemnantCount = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    FString ErrorMessage;
+};
+
+USTRUCT(BlueprintType)
+struct FRemnantPurchaseResponse
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    bool bSuccess = false;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    int32 RemnantsAdded = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    int32 NewRemnantCount = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    FString ReceiptId;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    FString ErrorMessage;
+};
+
+USTRUCT(BlueprintType)
+struct FMatchRewardResponse
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    bool bSuccess = false;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    int32 RewardAmount = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    int32 NewRemnantCount = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    bool bIsWinner = false;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    FString ErrorMessage;
+};
+
 // Callback types
 DECLARE_DELEGATE_OneParam(FOnAuthResponse, const FAuthResponse&);
 DECLARE_DELEGATE_OneParam(FOnProfileResponse, const FUserProfile&);
 DECLARE_DELEGATE_OneParam(FOnSimpleResponse, bool);
 DECLARE_DELEGATE_OneParam(FOnProfileUpdateResponse, const FProfileUpdateResponse&);
 DECLARE_DELEGATE_OneParam(FOnAvatarUploadResponse, const FAvatarUploadResponse&);
+DECLARE_DELEGATE_OneParam(FOnStoreCharactersResponse, const TArray<FStoreCharacterInfo>&);
+DECLARE_DELEGATE_OneParam(FOnRemnantPackagesResponse, const TArray<FRemnantPackage>&);
+DECLARE_DELEGATE_OneParam(FOnCharacterPurchaseResponse, const FCharacterPurchaseResponse&);
+DECLARE_DELEGATE_OneParam(FOnRemnantPurchaseResponse, const FRemnantPurchaseResponse&);
+DECLARE_DELEGATE_OneParam(FOnMatchRewardResponse, const FMatchRewardResponse&);
 
 UCLASS()
 class REMNANTBORN_API UEdsHttpService : public UObject
@@ -142,6 +255,13 @@ public:
     void UpdateProfileWithAvatar(const FString& UserId, const FString& AuthToken, const FString& Username, const FString& Bio, const FString& AvatarUrl, FOnProfileUpdateResponse Callback);
     void UploadAvatar(const FString& AuthToken, const FString& FilePath, FOnAvatarUploadResponse Callback);
     void UpdateGameStats(const FString& UserId, const FString& AuthToken, int32 Level, int32 RemnantCount, const FString& Operation, FOnSimpleResponse Callback);
+
+    // === Store Methods ===
+    void GetStoreCharacters(const FString& AuthToken, FOnStoreCharactersResponse Callback);
+    void GetRemnantPackages(const FString& AuthToken, FOnRemnantPackagesResponse Callback);
+    void BuyCharacter(const FString& AuthToken, const FString& CharacterId, FOnCharacterPurchaseResponse Callback);
+    void BuyRemnants(const FString& AuthToken, const FString& PackageId, const FString& CardNumber, const FString& CardExpiry, const FString& CardCVV, FOnRemnantPurchaseResponse Callback);
+    void SubmitMatchReward(const FString& AuthToken, bool bIsWinner, float MatchDuration, int32 EliminationOrder, const FString& MatchId, FOnMatchRewardResponse Callback);
     
     // === Local Storage ===
     bool LoadSavedAuth(FString& OutToken, FString& OutUserId);

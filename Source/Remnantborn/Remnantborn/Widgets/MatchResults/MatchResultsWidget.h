@@ -9,6 +9,7 @@ class UTextBlock;
 class UButton;
 class UVerticalBox;
 class UScrollBox;
+class UImage;
 
 UCLASS()
 class REMNANTBORN_API UMatchResultsWidget : public UUserWidget
@@ -30,6 +31,9 @@ public:
     // Update the results display
     UFUNCTION(BlueprintCallable, Category = "Match Results")
     void UpdateResultsDisplay();
+
+    UFUNCTION(BlueprintCallable, Category = "Match Results")
+    void DisplayMatchReward(int32 RewardAmount, int32 NewBalance, bool bIsWinner);
 
 protected:
     // Main title text
@@ -65,6 +69,15 @@ protected:
 
     UPROPERTY(meta = (BindWidget))
     UButton* PlayAgainButton;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    UTextBlock* RewardAmountText;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    UTextBlock* NewBalanceText;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    UImage* RewardRemnantIcon;
 
     // UI Elements for individual player results
     UPROPERTY(EditDefaultsOnly, Category = "UI")

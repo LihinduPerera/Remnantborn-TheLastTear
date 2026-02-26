@@ -7,6 +7,7 @@
 #include "Engine/LocalPlayer.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundCue.h"
+#include "Remnantborn/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
 
 UMyOnlineGameInstance::UMyOnlineGameInstance()
 {
@@ -867,6 +868,11 @@ void UMyOnlineGameInstance::GetUserProfile()
         if (Profile.bIsValid)
         {
             CurrentUserProfile = Profile;
+
+            if (UCharacterSelectionSubsystem* CharacterSubsystem = GetSubsystem<UCharacterSelectionSubsystem>())
+            {
+                CharacterSubsystem->SyncUnlocksFromBackend(Profile.PurchasedItems);
+            }
             
             // Broadcast profile update
             OnProfileUpdated.Broadcast(Profile);
@@ -894,6 +900,11 @@ void UMyOnlineGameInstance::GetMyProfile()
         if (Profile.bIsValid)
         {
             CurrentUserProfile = Profile;
+
+            if (UCharacterSelectionSubsystem* CharacterSubsystem = GetSubsystem<UCharacterSelectionSubsystem>())
+            {
+                CharacterSubsystem->SyncUnlocksFromBackend(Profile.PurchasedItems);
+            }
             
             // Broadcast profile update
             OnProfileUpdated.Broadcast(Profile);
@@ -1011,6 +1022,34 @@ void UMyOnlineGameInstance::UpdateGameStats(int32 Level, int32 RemnantCount, con
         }));
 }
 
+void UMyOnlineGameInstance::SubmitMatchReward(bool bIsWinner, float MatchDuration, int32 EliminationOrder, const FString& MatchId)
+{
+    if (!HttpService || !bIsLoggedIn || AuthToken.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Cannot submit match reward: Not logged in"));
+        return;
+    }
+
+    HttpService->SubmitMatchReward(AuthToken, bIsWinner, MatchDuration, EliminationOrder, MatchId,
+        FOnMatchRewardResponse::CreateLambda([this](const FMatchRewardResponse& Response)
+        {
+            if (Response.bSuccess)
+            {
+                CurrentUserProfile.RemnantCount = Response.NewRemnantCount;
+                OnProfileUpdated.Broadcast(CurrentUserProfile);
+                OnMatchRewardReceived.Broadcast(Response.RewardAmount, Response.NewRemnantCount, Response.bIsWinner);
+
+                UE_LOG(LogTemp, Log, TEXT("Match reward granted: +%d (new balance: %d)"),
+                    Response.RewardAmount,
+                    Response.NewRemnantCount);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Match reward submission failed: %s"), *Response.ErrorMessage);
+            }
+        }));
+}
+
 void UMyOnlineGameInstance::SetAuthState(bool bLoggedIn, const FString& Token, const FString& UserId, const FUserProfile& Profile)
 {
     bIsLoggedIn = bLoggedIn;
@@ -1020,6 +1059,11 @@ void UMyOnlineGameInstance::SetAuthState(bool bLoggedIn, const FString& Token, c
         AuthToken = Token;
         CurrentUserId = UserId;
         CurrentUserProfile = Profile;
+
+        if (UCharacterSelectionSubsystem* CharacterSubsystem = GetSubsystem<UCharacterSelectionSubsystem>())
+        {
+            CharacterSubsystem->SyncUnlocksFromBackend(Profile.PurchasedItems);
+        }
         
         // Broadcast both events
         OnAuthStateChanged.Broadcast(true);

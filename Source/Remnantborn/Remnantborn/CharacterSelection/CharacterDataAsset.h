@@ -37,6 +37,14 @@ public:
     // Character ID for saving/loading
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character Info")
     FName CharacterID;
+
+    // Price in Remnants (0 = free)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Store")
+    int32 RemnantPrice = 0;
+
+    // Optional store-specific description
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Store")
+    FText StoreDescription;
     
     // Is this character unlocked by default?
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Character Info")

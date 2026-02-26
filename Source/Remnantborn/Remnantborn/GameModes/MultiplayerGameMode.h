@@ -42,6 +42,8 @@ public:
 	void NotifyPlayerDied(APlayerController* PlayerController);
 
 private:
+    bool bRewardsDispatched = false;
+
 	void SetupPlayerInput(APlayerController* PlayerController);
     
     UFUNCTION()

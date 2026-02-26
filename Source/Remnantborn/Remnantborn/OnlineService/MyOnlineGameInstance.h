@@ -17,6 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnJoinSessionFailed, const FString&
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSessionDestroyed);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAuthStateChanged, bool, bIsLoggedIn);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnProfileUpdated, const FUserProfile&, UserProfile);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnMatchRewardReceived, int32, RewardAmount, int32, NewRemnantCount, bool, bIsWinner);
 
 USTRUCT(BlueprintType)
 struct FSessionInfo
@@ -228,6 +229,9 @@ public:
     
     UFUNCTION(BlueprintCallable, Category = "Authentication")
     void UpdateGameStats(int32 Level, int32 RemnantCount, const FString& Operation = "set");
+
+    UFUNCTION(BlueprintCallable, Category = "Authentication")
+    void SubmitMatchReward(bool bIsWinner, float MatchDuration, int32 EliminationOrder, const FString& MatchId = "");
     
     // === Getters ===
     UFUNCTION(BlueprintPure, Category = "Authentication")
@@ -238,6 +242,9 @@ public:
     
     UFUNCTION(BlueprintPure, Category = "Authentication")
     FString GetAuthToken() const { return AuthToken; }
+
+    UFUNCTION(BlueprintPure, Category = "Authentication")
+    UEdsHttpService* GetHttpService() const { return HttpService; }
     
     // === Multiplayer Events ===
     UPROPERTY(BlueprintAssignable, Category = "Multiplayer|Events")
@@ -261,6 +268,9 @@ public:
     
     UPROPERTY(BlueprintAssignable, Category = "Profile|Events")
     FOnProfileUpdated OnProfileUpdated;
+
+    UPROPERTY(BlueprintAssignable, Category = "Match|Events")
+    FOnMatchRewardReceived OnMatchRewardReceived;
     
     // === Data for Blueprint ===
     UPROPERTY(BlueprintReadOnly, Category = "Multiplayer")

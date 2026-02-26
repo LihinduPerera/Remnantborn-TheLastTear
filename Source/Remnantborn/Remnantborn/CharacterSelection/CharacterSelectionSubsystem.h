@@ -30,6 +30,9 @@ public:
     TArray<UCharacterDataAsset*> GetAvailableCharacters() const;
 
     UFUNCTION(BlueprintCallable, Category = "Character Selection")
+    TArray<UCharacterDataAsset*> GetAllCharactersIncludingLocked() const;
+
+    UFUNCTION(BlueprintCallable, Category = "Character Selection")
     UCharacterDataAsset* GetCharacterByID(const FName& CharacterID) const;
 
     UFUNCTION(BlueprintCallable, Category = "Character Selection")
@@ -37,6 +40,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Character Selection")
     void UnlockCharacter(const FName& CharacterID);
+
+    UFUNCTION(BlueprintCallable, Category = "Character Selection")
+    void SyncUnlocksFromBackend(const TArray<FString>& PurchasedItems);
 
     // Player Selection
     UFUNCTION(BlueprintCallable, Category = "Character Selection")

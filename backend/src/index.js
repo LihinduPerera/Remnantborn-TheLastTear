@@ -16,6 +16,8 @@ const postRoutes = require('./routes/posts');
 const eventRoutes = require('./routes/events');
 const commentRoutes = require('./routes/comments');
 const friendRoutes = require('./routes/friends');
+const storeRoutes = require('./routes/store');
+const matchRoutes = require('./routes/match');
 
 // Import database config
 const { supabase } = require('./config/database');
@@ -73,6 +75,8 @@ app.use('/api/posts', postRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/friends', friendRoutes);
+app.use('/api/store', storeRoutes);
+app.use('/api/match', matchRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

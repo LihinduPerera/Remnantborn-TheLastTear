@@ -3,6 +3,7 @@
 #include "Components/Button.h"
 #include "Components/VerticalBox.h"
 #include "Components/ScrollBox.h"
+#include "Components/Image.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
@@ -29,6 +30,11 @@ void UMatchResultsWidget::NativeConstruct()
 
     // Initialize match results
     InitializeMatchResults();
+
+    if (UMyOnlineGameInstance* GameInstance = GetGameInstance<UMyOnlineGameInstance>())
+    {
+        GameInstance->OnMatchRewardReceived.AddDynamic(this, &UMatchResultsWidget::DisplayMatchReward);
+    }
 }
 
 void UMatchResultsWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -369,4 +375,25 @@ void UMatchResultsWidget::OnPlayAgainClicked()
 void UMatchResultsWidget::OnMatchStateChangedDelegate(EMatchState NewState)
 {
     OnMatchStateChanged(NewState);
+}
+
+void UMatchResultsWidget::DisplayMatchReward(int32 RewardAmount, int32 NewBalance, bool bIsWinner)
+{
+    if (RewardAmountText)
+    {
+        RewardAmountText->SetText(FText::FromString(FString::Printf(TEXT("+%d Remnants"), RewardAmount)));
+        RewardAmountText->SetColorAndOpacity(bIsWinner
+            ? FSlateColor(FLinearColor(1.0f, 0.84f, 0.0f, 1.0f))
+            : FSlateColor(FLinearColor(0.85f, 0.85f, 0.85f, 1.0f)));
+    }
+
+    if (NewBalanceText)
+    {
+        NewBalanceText->SetText(FText::FromString(FString::Printf(TEXT("Balance: %d"), NewBalance)));
+    }
+
+    if (RewardRemnantIcon)
+    {
+        RewardRemnantIcon->SetVisibility(ESlateVisibility::Visible);
+    }
 }

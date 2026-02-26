@@ -297,3 +297,17 @@ void AMultiplayerPlayerController::Client_NotifyPlayerDeath_Implementation(const
 	// Optional: Show a death overlay before match ends
 	// This is useful for showing "YOU DIED" message immediately
 }
+
+void AMultiplayerPlayerController::Client_SubmitMatchReward_Implementation(bool bIsWinner, float MatchDuration, int32 EliminationOrder, const FString& MatchId)
+{
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
+	{
+		GameInstance->SubmitMatchReward(bIsWinner, MatchDuration, EliminationOrder, MatchId);
+		OnLocalMatchRewardProcessed.Broadcast(bIsWinner, EliminationOrder);
+	}
+}

@@ -148,6 +148,358 @@ void UEdsHttpService::UpdateGameStats(const FString& UserId, const FString& Auth
         });
 }
 
+void UEdsHttpService::GetStoreCharacters(const FString& AuthToken, FOnStoreCharactersResponse Callback)
+{
+    SendRequestWithAuth(TEXT("/store/characters"), TEXT("GET"), nullptr, AuthToken,
+        [Callback](const FHttpResponsePtr& Response, bool bSuccess)
+        {
+            TArray<FStoreCharacterInfo> Results;
+
+            if (bSuccess && Response.IsValid() && Response->GetResponseCode() == 200)
+            {
+                TSharedPtr<FJsonObject> JsonObject;
+                TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
+
+                if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
+                {
+                    const TSharedPtr<FJsonObject>* DataObjectPtr = nullptr;
+                    const TSharedPtr<FJsonObject> DataObject =
+                        JsonObject->TryGetObjectField(TEXT("data"), DataObjectPtr) && DataObjectPtr != nullptr
+                        ? *DataObjectPtr
+                        : JsonObject;
+
+                    const TArray<TSharedPtr<FJsonValue>>* CharactersArray = nullptr;
+                    if (DataObject.IsValid() && DataObject->TryGetArrayField(TEXT("characters"), CharactersArray))
+                    {
+                        for (const TSharedPtr<FJsonValue>& CharacterValue : *CharactersArray)
+                        {
+                            const TSharedPtr<FJsonObject>* CharacterObjPtr = nullptr;
+                            if (!CharacterValue.IsValid() || !CharacterValue->TryGetObject(CharacterObjPtr) || CharacterObjPtr == nullptr)
+                            {
+                                continue;
+                            }
+
+                            const TSharedPtr<FJsonObject>& CharacterObj = *CharacterObjPtr;
+                            FStoreCharacterInfo CharacterInfo;
+                            CharacterObj->TryGetStringField(TEXT("item_id"), CharacterInfo.ItemId);
+                            CharacterObj->TryGetStringField(TEXT("name"), CharacterInfo.Name);
+                            CharacterObj->TryGetStringField(TEXT("description"), CharacterInfo.Description);
+                            CharacterObj->TryGetStringField(TEXT("image_url"), CharacterInfo.ImageUrl);
+                            CharacterObj->TryGetBoolField(TEXT("owned"), CharacterInfo.bOwned);
+                            CharacterObj->TryGetBoolField(TEXT("can_afford"), CharacterInfo.bCanAfford);
+
+                            double Price = 0.0;
+                            if (CharacterObj->TryGetNumberField(TEXT("price"), Price))
+                            {
+                                CharacterInfo.Price = static_cast<int32>(Price);
+                            }
+
+                            Results.Add(CharacterInfo);
+                        }
+                    }
+                }
+            }
+
+            if (Callback.IsBound())
+            {
+                Callback.Execute(Results);
+            }
+        });
+}
+
+void UEdsHttpService::GetRemnantPackages(const FString& AuthToken, FOnRemnantPackagesResponse Callback)
+{
+    SendRequestWithAuth(TEXT("/store/packages"), TEXT("GET"), nullptr, AuthToken,
+        [Callback](const FHttpResponsePtr& Response, bool bSuccess)
+        {
+            TArray<FRemnantPackage> Results;
+
+            if (bSuccess && Response.IsValid() && Response->GetResponseCode() == 200)
+            {
+                TSharedPtr<FJsonObject> JsonObject;
+                TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
+
+                if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
+                {
+                    const TSharedPtr<FJsonObject>* DataObjectPtr = nullptr;
+                    const TSharedPtr<FJsonObject> DataObject =
+                        JsonObject->TryGetObjectField(TEXT("data"), DataObjectPtr) && DataObjectPtr != nullptr
+                        ? *DataObjectPtr
+                        : JsonObject;
+
+                    const TArray<TSharedPtr<FJsonValue>>* PackagesArray = nullptr;
+                    if (DataObject.IsValid())
+                    {
+                        if (!DataObject->TryGetArrayField(TEXT("packages"), PackagesArray))
+                        {
+                            DataObject->TryGetArrayField(TEXT("data"), PackagesArray);
+                        }
+                    }
+
+                    if (PackagesArray == nullptr && JsonObject.IsValid())
+                    {
+                        JsonObject->TryGetArrayField(TEXT("data"), PackagesArray);
+                    }
+
+                    if (PackagesArray != nullptr)
+                    {
+                        for (const TSharedPtr<FJsonValue>& PackageValue : *PackagesArray)
+                        {
+                            const TSharedPtr<FJsonObject>* PackageObjPtr = nullptr;
+                            if (!PackageValue.IsValid() || !PackageValue->TryGetObject(PackageObjPtr) || PackageObjPtr == nullptr)
+                            {
+                                continue;
+                            }
+
+                            const TSharedPtr<FJsonObject>& PackageObj = *PackageObjPtr;
+                            FRemnantPackage PackageInfo;
+                            PackageObj->TryGetStringField(TEXT("id"), PackageInfo.PackageId);
+                            PackageObj->TryGetStringField(TEXT("name"), PackageInfo.Name);
+                            PackageObj->TryGetStringField(TEXT("display_price"), PackageInfo.DisplayPrice);
+
+                            double RemnantAmount = 0.0;
+                            if (PackageObj->TryGetNumberField(TEXT("remnant_amount"), RemnantAmount))
+                            {
+                                PackageInfo.RemnantAmount = static_cast<int32>(RemnantAmount);
+                            }
+
+                            double SortOrder = 0.0;
+                            if (PackageObj->TryGetNumberField(TEXT("sort_order"), SortOrder))
+                            {
+                                PackageInfo.SortOrder = static_cast<int32>(SortOrder);
+                            }
+
+                            Results.Add(PackageInfo);
+                        }
+                    }
+                }
+            }
+
+            if (Callback.IsBound())
+            {
+                Callback.Execute(Results);
+            }
+        });
+}
+
+void UEdsHttpService::BuyCharacter(const FString& AuthToken, const FString& CharacterId, FOnCharacterPurchaseResponse Callback)
+{
+    TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject());
+    JsonObject->SetStringField(TEXT("characterId"), CharacterId);
+
+    SendRequestWithAuth(TEXT("/store/buy-character"), TEXT("POST"), JsonObject, AuthToken,
+        [Callback](const FHttpResponsePtr& Response, bool bSuccess)
+        {
+            FCharacterPurchaseResponse Result;
+
+            if (!bSuccess || !Response.IsValid())
+            {
+                Result.bSuccess = false;
+                Result.ErrorMessage = TEXT("Network error");
+            }
+            else
+            {
+                TSharedPtr<FJsonObject> JsonResp;
+                TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
+
+                if (FJsonSerializer::Deserialize(Reader, JsonResp) && JsonResp.IsValid())
+                {
+                    bool bSuccessField = false;
+                    JsonResp->TryGetBoolField(TEXT("success"), bSuccessField);
+                    Result.bSuccess = bSuccessField && (Response->GetResponseCode() == 200 || Response->GetResponseCode() == 201);
+
+                    const TSharedPtr<FJsonObject>* DataObjectPtr = nullptr;
+                    const TSharedPtr<FJsonObject> DataObject =
+                        JsonResp->TryGetObjectField(TEXT("data"), DataObjectPtr) && DataObjectPtr != nullptr
+                        ? *DataObjectPtr
+                        : JsonResp;
+
+                    if (DataObject.IsValid())
+                    {
+                        DataObject->TryGetStringField(TEXT("character_id"), Result.CharacterId);
+                        double NewCount = 0.0;
+                        if (DataObject->TryGetNumberField(TEXT("new_remnant_count"), NewCount))
+                        {
+                            Result.NewRemnantCount = static_cast<int32>(NewCount);
+                        }
+                    }
+
+                    if (!Result.bSuccess)
+                    {
+                        JsonResp->TryGetStringField(TEXT("message"), Result.ErrorMessage);
+                        if (Result.ErrorMessage.IsEmpty())
+                        {
+                            Result.ErrorMessage = FString::Printf(TEXT("Purchase failed (Code: %d)"), Response->GetResponseCode());
+                        }
+                    }
+                }
+                else
+                {
+                    Result.bSuccess = false;
+                    Result.ErrorMessage = TEXT("Invalid response format");
+                }
+            }
+
+            if (Callback.IsBound())
+            {
+                Callback.Execute(Result);
+            }
+        });
+}
+
+void UEdsHttpService::BuyRemnants(const FString& AuthToken, const FString& PackageId, const FString& CardNumber, const FString& CardExpiry, const FString& CardCVV, FOnRemnantPurchaseResponse Callback)
+{
+    TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject());
+    JsonObject->SetStringField(TEXT("packageId"), PackageId);
+    JsonObject->SetStringField(TEXT("cardNumber"), CardNumber);
+    JsonObject->SetStringField(TEXT("cardExpiry"), CardExpiry);
+    JsonObject->SetStringField(TEXT("cardCVV"), CardCVV);
+
+    SendRequestWithAuth(TEXT("/store/buy-remnants"), TEXT("POST"), JsonObject, AuthToken,
+        [Callback](const FHttpResponsePtr& Response, bool bSuccess)
+        {
+            FRemnantPurchaseResponse Result;
+
+            if (!bSuccess || !Response.IsValid())
+            {
+                Result.bSuccess = false;
+                Result.ErrorMessage = TEXT("Network error");
+            }
+            else
+            {
+                TSharedPtr<FJsonObject> JsonResp;
+                TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
+
+                if (FJsonSerializer::Deserialize(Reader, JsonResp) && JsonResp.IsValid())
+                {
+                    bool bSuccessField = false;
+                    JsonResp->TryGetBoolField(TEXT("success"), bSuccessField);
+                    Result.bSuccess = bSuccessField && (Response->GetResponseCode() == 200 || Response->GetResponseCode() == 201);
+
+                    const TSharedPtr<FJsonObject>* DataObjectPtr = nullptr;
+                    const TSharedPtr<FJsonObject> DataObject =
+                        JsonResp->TryGetObjectField(TEXT("data"), DataObjectPtr) && DataObjectPtr != nullptr
+                        ? *DataObjectPtr
+                        : JsonResp;
+
+                    if (DataObject.IsValid())
+                    {
+                        double Added = 0.0;
+                        if (DataObject->TryGetNumberField(TEXT("remnants_added"), Added))
+                        {
+                            Result.RemnantsAdded = static_cast<int32>(Added);
+                        }
+
+                        double NewCount = 0.0;
+                        if (DataObject->TryGetNumberField(TEXT("new_remnant_count"), NewCount))
+                        {
+                            Result.NewRemnantCount = static_cast<int32>(NewCount);
+                        }
+
+                        DataObject->TryGetStringField(TEXT("receipt_id"), Result.ReceiptId);
+                    }
+
+                    if (!Result.bSuccess)
+                    {
+                        JsonResp->TryGetStringField(TEXT("message"), Result.ErrorMessage);
+                        if (Result.ErrorMessage.IsEmpty())
+                        {
+                            Result.ErrorMessage = FString::Printf(TEXT("Remnant purchase failed (Code: %d)"), Response->GetResponseCode());
+                        }
+                    }
+                }
+                else
+                {
+                    Result.bSuccess = false;
+                    Result.ErrorMessage = TEXT("Invalid response format");
+                }
+            }
+
+            if (Callback.IsBound())
+            {
+                Callback.Execute(Result);
+            }
+        });
+}
+
+void UEdsHttpService::SubmitMatchReward(const FString& AuthToken, bool bIsWinner, float MatchDuration, int32 EliminationOrder, const FString& MatchId, FOnMatchRewardResponse Callback)
+{
+    TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject());
+    JsonObject->SetBoolField(TEXT("isWinner"), bIsWinner);
+    JsonObject->SetNumberField(TEXT("matchDuration"), MatchDuration);
+    JsonObject->SetNumberField(TEXT("eliminationOrder"), EliminationOrder);
+    if (!MatchId.IsEmpty())
+    {
+        JsonObject->SetStringField(TEXT("matchId"), MatchId);
+    }
+
+    SendRequestWithAuth(TEXT("/match/reward"), TEXT("POST"), JsonObject, AuthToken,
+        [Callback](const FHttpResponsePtr& Response, bool bSuccess)
+        {
+            FMatchRewardResponse Result;
+
+            if (!bSuccess || !Response.IsValid())
+            {
+                Result.bSuccess = false;
+                Result.ErrorMessage = TEXT("Network error");
+            }
+            else
+            {
+                TSharedPtr<FJsonObject> JsonResp;
+                TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
+
+                if (FJsonSerializer::Deserialize(Reader, JsonResp) && JsonResp.IsValid())
+                {
+                    bool bSuccessField = false;
+                    JsonResp->TryGetBoolField(TEXT("success"), bSuccessField);
+                    Result.bSuccess = bSuccessField && (Response->GetResponseCode() == 200 || Response->GetResponseCode() == 201);
+
+                    const TSharedPtr<FJsonObject>* DataObjectPtr = nullptr;
+                    const TSharedPtr<FJsonObject> DataObject =
+                        JsonResp->TryGetObjectField(TEXT("data"), DataObjectPtr) && DataObjectPtr != nullptr
+                        ? *DataObjectPtr
+                        : JsonResp;
+
+                    if (DataObject.IsValid())
+                    {
+                        double RewardAmount = 0.0;
+                        if (DataObject->TryGetNumberField(TEXT("reward_amount"), RewardAmount))
+                        {
+                            Result.RewardAmount = static_cast<int32>(RewardAmount);
+                        }
+
+                        double NewCount = 0.0;
+                        if (DataObject->TryGetNumberField(TEXT("new_remnant_count"), NewCount))
+                        {
+                            Result.NewRemnantCount = static_cast<int32>(NewCount);
+                        }
+
+                        DataObject->TryGetBoolField(TEXT("is_winner"), Result.bIsWinner);
+                    }
+
+                    if (!Result.bSuccess)
+                    {
+                        JsonResp->TryGetStringField(TEXT("message"), Result.ErrorMessage);
+                        if (Result.ErrorMessage.IsEmpty())
+                        {
+                            Result.ErrorMessage = FString::Printf(TEXT("Match reward submission failed (Code: %d)"), Response->GetResponseCode());
+                        }
+                    }
+                }
+                else
+                {
+                    Result.bSuccess = false;
+                    Result.ErrorMessage = TEXT("Invalid response format");
+                }
+            }
+
+            if (Callback.IsBound())
+            {
+                Callback.Execute(Result);
+            }
+        });
+}
+
 bool UEdsHttpService::LoadSavedAuth(FString& OutToken, FString& OutUserId)
 {
     if (GConfig)

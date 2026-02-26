@@ -89,6 +89,11 @@ TArray<UCharacterDataAsset*> UCharacterSelectionSubsystem::GetAvailableCharacter
     return UnlockedCharacters;
 }
 
+TArray<UCharacterDataAsset*> UCharacterSelectionSubsystem::GetAllCharactersIncludingLocked() const
+{
+    return AvailableCharacters;
+}
+
 UCharacterDataAsset* UCharacterSelectionSubsystem::GetCharacterByID(const FName& CharacterID) const
 {
     for (UCharacterDataAsset* Character : AvailableCharacters)
@@ -111,6 +116,27 @@ void UCharacterSelectionSubsystem::UnlockCharacter(const FName& CharacterID)
 {
     CharacterUnlockStatus.Add(CharacterID, true);
     OnCharacterUnlocked.Broadcast(CharacterID, true);
+}
+
+void UCharacterSelectionSubsystem::SyncUnlocksFromBackend(const TArray<FString>& PurchasedItems)
+{
+    for (UCharacterDataAsset* Character : AvailableCharacters)
+    {
+        if (Character)
+        {
+            CharacterUnlockStatus.Add(Character->CharacterID, Character->bUnlockedByDefault);
+        }
+    }
+
+    for (const FString& ItemId : PurchasedItems)
+    {
+        const FName CharacterID(*ItemId);
+        if (CharacterUnlockStatus.Contains(CharacterID) && !CharacterUnlockStatus[CharacterID])
+        {
+            CharacterUnlockStatus[CharacterID] = true;
+            OnCharacterUnlocked.Broadcast(CharacterID, true);
+        }
+    }
 }
 
 void UCharacterSelectionSubsystem::SelectCharacterForPlayer(APlayerController* PlayerController, UCharacterDataAsset* Character)
