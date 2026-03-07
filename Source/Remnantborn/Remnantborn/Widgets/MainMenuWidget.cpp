@@ -391,12 +391,9 @@ void UMainMenuWidget::HandleProfileUpdated(const FUserProfile& UserProfile)
     
     CurrentUserProfile = UserProfile;
     
-    // If we just got a profile update and we're not showing as logged in, update
-    if (UserProfile.bIsValid && !bIsLoggedIn)
-    {
-        bIsLoggedIn = true;
-        UpdateUserInfo();
-    }
+    // always refresh display and update login flag based on validity
+    bIsLoggedIn = UserProfile.bIsValid;
+    UpdateUserInfo();
     
     SetStatusText("Profile updated");
 }

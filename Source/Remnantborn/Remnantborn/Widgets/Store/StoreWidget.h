@@ -18,6 +18,7 @@ class REMNANTBORN_API UStoreWidget : public UUserWidget
 
 public:
     virtual void NativeConstruct() override;
+    virtual void NativeDestruct() override;
 
     UFUNCTION(BlueprintCallable, Category = "Store")
     void RefreshStore();
@@ -45,6 +46,7 @@ private:
     UPROPERTY()
     UStoreSubsystem* StoreSubsystem;
 
+    // event handlers
     UFUNCTION()
     void HandleCatalogLoaded(const TArray<FStoreCharacterInfo>& Characters);
 
@@ -56,6 +58,13 @@ private:
 
     UFUNCTION()
     void OnCharacterPurchaseRequested(const FString& CharacterId);
+
+    // authentication/profile callbacks from GameInstance
+    UFUNCTION()
+    void HandleAuthStateChanged(bool bIsLoggedIn);
+
+    UFUNCTION()
+    void HandleProfileUpdated(const FUserProfile& UserProfile);
 
     void SetLoadingState(bool bLoading);
     void UpdateBalanceText(int32 NewBalance);

@@ -24,6 +24,19 @@ void UStoreWidget::NativeConstruct()
     StoreSubsystem->OnCharacterPurchaseCompleted.AddDynamic(this, &UStoreWidget::HandleCharacterPurchaseCompleted);
     StoreSubsystem->OnStoreError.AddDynamic(this, &UStoreWidget::HandleStoreError);
 
+    // listen for auth/profile changes so we can refresh balance & catalog
+    if (UMyOnlineGameInstance* GameInstance = GetGameInstance<UMyOnlineGameInstance>())
+    {
+        GameInstance->OnAuthStateChanged.AddDynamic(this, &UStoreWidget::HandleAuthStateChanged);
+        GameInstance->OnProfileUpdated.AddDynamic(this, &UStoreWidget::HandleProfileUpdated);
+
+        if (GameInstance->IsLoggedIn())
+        {
+            UpdateBalanceText(GameInstance->GetCurrentUserProfile().RemnantCount);
+            // we'll call RefreshStore once below
+        }
+    }
+
     RefreshStore();
 }
 
@@ -37,6 +50,17 @@ void UStoreWidget::RefreshStore()
     SetLoadingState(true);
     SetNotification(TEXT(""), false);
     StoreSubsystem->FetchStoreCatalog();
+}
+
+
+void UStoreWidget::NativeDestruct()
+{
+    if (UMyOnlineGameInstance* GI = GetGameInstance<UMyOnlineGameInstance>())
+    {
+        GI->OnAuthStateChanged.RemoveDynamic(this, &UStoreWidget::HandleAuthStateChanged);
+        GI->OnProfileUpdated.RemoveDynamic(this, &UStoreWidget::HandleProfileUpdated);
+    }
+    Super::NativeDestruct();
 }
 
 void UStoreWidget::HandleCatalogLoaded(const TArray<FStoreCharacterInfo>& Characters)
@@ -123,6 +147,42 @@ void UStoreWidget::OnCharacterPurchaseRequested(const FString& CharacterId)
 
     SetLoadingState(true);
     StoreSubsystem->PurchaseCharacter(CharacterId);
+}
+
+
+// --------------------------------------------------
+// GameInstance event handlers
+// --------------------------------------------------
+
+void UStoreWidget::HandleAuthStateChanged(bool bIsLoggedIn)
+{
+    if (bIsLoggedIn)
+    {
+        // user just logged in or restored session; refresh everything
+        SetNotification(TEXT(""), false);
+        if (UMyOnlineGameInstance* GI = GetGameInstance<UMyOnlineGameInstance>())
+        {
+            UpdateBalanceText(GI->GetCurrentUserProfile().RemnantCount);
+        }
+        RefreshStore();
+    }
+    else
+    {
+        // logged out: clear grid and notify
+        if (CharacterGrid)
+        {
+            CharacterGrid->ClearChildren();
+        }
+        UpdateBalanceText(0);
+        SetNotification(TEXT("Please log in to view store"), true);
+    }
+}
+
+void UStoreWidget::HandleProfileUpdated(const FUserProfile& UserProfile)
+{
+    UpdateBalanceText(UserProfile.RemnantCount);
+    // balance changed; re-evaluate affordability by refreshing catalog
+    RefreshStore();
 }
 
 void UStoreWidget::SetLoadingState(bool bLoading)

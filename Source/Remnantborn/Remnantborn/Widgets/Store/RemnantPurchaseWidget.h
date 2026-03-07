@@ -20,6 +20,7 @@ class REMNANTBORN_API URemnantPurchaseWidget : public UUserWidget
 
 public:
     virtual void NativeConstruct() override;
+    virtual void NativeDestruct() override;
 
     UFUNCTION(BlueprintCallable, Category = "Store")
     void RefreshPackages();
@@ -76,6 +77,13 @@ private:
 
     UFUNCTION()
     void OnPayNowClicked();
+
+    // authentication/profile callbacks
+    UFUNCTION()
+    void HandleAuthStateChanged(bool bIsLoggedIn);
+
+    UFUNCTION()
+    void HandleProfileUpdated(const FUserProfile& UserProfile);
 
     bool ValidatePaymentInputs() const;
     void SetLoadingState(bool bLoading);

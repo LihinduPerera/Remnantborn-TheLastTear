@@ -29,6 +29,19 @@ void URemnantPurchaseWidget::NativeConstruct()
     StoreSubsystem->OnRemnantPurchaseCompleted.AddDynamic(this, &URemnantPurchaseWidget::HandleRemnantPurchaseCompleted);
     StoreSubsystem->OnStoreError.AddDynamic(this, &URemnantPurchaseWidget::HandleStoreError);
 
+    // auth/profile hooks
+    if (UMyOnlineGameInstance* GameInstance = GetGameInstance<UMyOnlineGameInstance>())
+    {
+        GameInstance->OnAuthStateChanged.AddDynamic(this, &URemnantPurchaseWidget::HandleAuthStateChanged);
+        GameInstance->OnProfileUpdated.AddDynamic(this, &URemnantPurchaseWidget::HandleProfileUpdated);
+
+        if (GameInstance->IsLoggedIn())
+        {
+            UpdateBalanceText(GameInstance->GetCurrentUserProfile().RemnantCount);
+            RefreshPackages();
+        }
+    }
+
     RefreshPackages();
 }
 
@@ -41,6 +54,17 @@ void URemnantPurchaseWidget::RefreshPackages()
 
     SetLoadingState(true);
     StoreSubsystem->FetchRemnantPackages();
+}
+
+
+void URemnantPurchaseWidget::NativeDestruct()
+{
+    if (UMyOnlineGameInstance* GI = GetGameInstance<UMyOnlineGameInstance>())
+    {
+        GI->OnAuthStateChanged.RemoveDynamic(this, &URemnantPurchaseWidget::HandleAuthStateChanged);
+        GI->OnProfileUpdated.RemoveDynamic(this, &URemnantPurchaseWidget::HandleProfileUpdated);
+    }
+    Super::NativeDestruct();
 }
 
 void URemnantPurchaseWidget::HandlePackagesLoaded(const TArray<FRemnantPackage>& Packages)
@@ -132,6 +156,39 @@ void URemnantPurchaseWidget::OnPayNowClicked()
         CardNumberInput ? CardNumberInput->GetText().ToString() : TEXT(""),
         CardExpiryInput ? CardExpiryInput->GetText().ToString() : TEXT(""),
         CardCVVInput ? CardCVVInput->GetText().ToString() : TEXT(""));
+}
+
+
+// --------------------------------------------------
+// GameInstance event handlers
+// --------------------------------------------------
+
+void URemnantPurchaseWidget::HandleAuthStateChanged(bool bIsLoggedIn)
+{
+    if (bIsLoggedIn)
+    {
+        SetNotification(TEXT(""), false);
+        if (UMyOnlineGameInstance* GI = GetGameInstance<UMyOnlineGameInstance>())
+        {
+            UpdateBalanceText(GI->GetCurrentUserProfile().RemnantCount);
+        }
+        RefreshPackages();
+    }
+    else
+    {
+        UpdateBalanceText(0);
+        SetNotification(TEXT("Please log in to buy Remnants"), true);
+        if (PackageContainer)
+        {
+            PackageContainer->ClearChildren();
+        }
+    }
+}
+
+void URemnantPurchaseWidget::HandleProfileUpdated(const FUserProfile& UserProfile)
+{
+    UpdateBalanceText(UserProfile.RemnantCount);
+    RefreshPackages();
 }
 
 bool URemnantPurchaseWidget::ValidatePaymentInputs() const
