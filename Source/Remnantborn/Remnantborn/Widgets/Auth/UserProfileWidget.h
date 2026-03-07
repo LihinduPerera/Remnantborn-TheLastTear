@@ -10,6 +10,7 @@
 #include "UserProfileWidget.generated.h"
 
 class UOwnedCharacterCardWidget;
+class UProfileEditWidget; // forward declare profile editor
 
 UCLASS()
 class REMNANTBORN_API UUserProfileWidget : public UUserWidget
@@ -32,6 +33,10 @@ public:
     
 	UFUNCTION()
 	void OnRefreshClicked();
+
+	// profile editing
+	UFUNCTION()
+	void OnEditProfileClicked();
 
 	// callbacks from GameInstance
 	UFUNCTION()
@@ -73,6 +78,19 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Widgets")
 	TSubclassOf<UOwnedCharacterCardWidget> OwnedCharacterCardClass;
+
+	// button that appears on the profile page to launch the editor
+	UPROPERTY(meta = (BindWidget))
+	UButton* EditProfileButton;
+
+	// class to use when spawning the editor at runtime (selectable in defaults)
+	UPROPERTY(EditAnywhere, Category = "Widgets")
+	TSubclassOf<UProfileEditWidget> ProfileEditWidgetClass;
+
+	// pointer to the spawned/editor instance; if you drag one into the widget tree
+	// then this will be assigned automatically via binding, otherwise we spawn it
+	UPROPERTY(meta = (BindWidgetOptional))
+	UProfileEditWidget* ProfileEditWidget;
     
 private:
 	FString CurrentAvatarUrl;

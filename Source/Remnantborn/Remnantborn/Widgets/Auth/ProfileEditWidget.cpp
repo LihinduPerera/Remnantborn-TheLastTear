@@ -21,10 +21,6 @@ void UProfileEditWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
     
-	if (EditButton)
-	{
-		EditButton->OnClicked.AddDynamic(this, &UProfileEditWidget::OnEditClicked);
-	}
     
 	if (SaveButton)
 	{
@@ -41,10 +37,7 @@ void UProfileEditWidget::NativeConstruct()
 		ChangeAvatarButton->OnClicked.AddDynamic(this, &UProfileEditWidget::OnChangeAvatarClicked);
 	}
     
-	if (LogoutButton)
-	{
-		LogoutButton->OnClicked.AddDynamic(this, &UProfileEditWidget::OnLogoutClicked);
-	}
+
     
 	UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
 	if (GameInstance)
@@ -63,13 +56,12 @@ void UProfileEditWidget::NativeConstruct()
 		LoadingBar->SetVisibility(ESlateVisibility::Collapsed);
 	}
     
-	SetEditMode(false);
+	// already showing edit controls by default
 }
 
 void UProfileEditWidget::NativeDestruct()
 {
 	Super::NativeDestruct();
-    
 	UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
 	if (GameInstance)
 	{
@@ -143,50 +135,7 @@ void UProfileEditWidget::UpdateDisplayWithProfile()
     LoadAvatarFromUrl(CurrentProfile.AvatarUrl);
 }
 
-void UProfileEditWidget::SetEditMode(bool bEditMode)
-{
-	bIsEditMode = bEditMode;
-    
-	if (DisplayBox)
-	{
-		DisplayBox->SetVisibility(bEditMode ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
-	}
-    
-	if (EditBox)
-	{
-		EditBox->SetVisibility(bEditMode ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-	}
-    
-	if (EditButton)
-	{
-		EditButton->SetVisibility(bEditMode ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
-	}
-    
-	if (SaveButton)
-	{
-		SaveButton->SetVisibility(bEditMode ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-	}
-    
-	if (CancelButton)
-	{
-		CancelButton->SetVisibility(bEditMode ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-	}
-    
-	if (ChangeAvatarButton)
-	{
-		ChangeAvatarButton->SetVisibility(bEditMode ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-	}
-    
-	if (EditButtonText)
-	{
-		EditButtonText->SetText(FText::FromString(bEditMode ? TEXT("Editing...") : TEXT("Edit Profile")));
-	}
-}
 
-void UProfileEditWidget::OnEditClicked()
-{
-	SetEditMode(true);
-}
 
 void UProfileEditWidget::OnSaveClicked()
 {
@@ -223,8 +172,6 @@ void UProfileEditWidget::OnSaveClicked()
 		GameInstance->UpdateProfile(NewUsername, NewBio);
 	}
     
-	SetEditMode(false);
-    
 	if (StatusText)
 	{
 		StatusText->SetText(FText::FromString(TEXT("Saving...")));
@@ -234,8 +181,8 @@ void UProfileEditWidget::OnSaveClicked()
 void UProfileEditWidget::OnCancelClicked()
 {
 	UpdateDisplayWithProfile();
-	SetEditMode(false);
-    
+	// simply hide when cancelling
+	RemoveFromParent();
 	if (StatusText)
 	{
 		StatusText->SetText(FText::FromString(TEXT("")));
@@ -295,15 +242,6 @@ void UProfileEditWidget::UploadSelectedAvatar(FString FilePath)
     GameInstance->UploadAvatar(FilePath);
 }
 
-void UProfileEditWidget::OnLogoutClicked()
-{
-	UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
-	if (GameInstance)
-	{
-		GameInstance->Logout();
-	}
-	RemoveFromParent();
-}
 
 void UProfileEditWidget::OnProfileUpdated(const FUserProfile& Profile)
 {

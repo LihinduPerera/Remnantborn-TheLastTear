@@ -1,4 +1,5 @@
 #include "UserProfileWidget.h"
+#include "ProfileEditWidget.h" // show/hide embedded editor
 #include "Remnantborn/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
 #include "OwnedCharacterCardWidget.h"
@@ -30,6 +31,31 @@ void UUserProfileWidget::NativeConstruct()
 		RefreshButton->OnClicked.AddDynamic(this, &UUserProfileWidget::OnRefreshClicked);
 	}
 
+	// open profile edit panel if embedded
+	if (EditProfileButton)
+	{
+		EditProfileButton->OnClicked.AddDynamic(this, &UUserProfileWidget::OnEditProfileClicked);
+	}
+
+	// if a class was specified in defaults but no instance was bound already, spawn it
+	if (!ProfileEditWidget && ProfileEditWidgetClass)
+	{
+		ProfileEditWidget = CreateWidget<UProfileEditWidget>(this, ProfileEditWidgetClass);
+		if (ProfileEditWidget)
+		{
+			if (UPanelWidget* Root = Cast<UPanelWidget>(GetRootWidget()))
+			{
+				Root->AddChild(ProfileEditWidget);
+			}
+		}
+	}
+
+	// ensure editor starts hidden
+	if (ProfileEditWidget)
+	{
+		ProfileEditWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
 	// Subscribe to profile/auth changes so widget works anywhere (tabs, menus, etc.)
 	UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
 	if (GameInstance)
@@ -48,6 +74,16 @@ void UUserProfileWidget::NativeConstruct()
 
 void UUserProfileWidget::UpdateProfile(const FString& Username, int32 Level, int32 RemnantCount, const FString& AvatarUrl, const FString& Email, const FString& Bio, const FString& CreatedAt)
 {
+    // propagate data to the embedded editor if present
+    if (ProfileEditWidget)
+    {
+        UMyOnlineGameInstance* GI = Cast<UMyOnlineGameInstance>(GetGameInstance());
+        if (GI)
+        {
+            ProfileEditWidget->SetProfileData(GI->GetCurrentUserProfile());
+        }
+    }
+
     if (UsernameText)
     {
         UsernameText->SetText(FText::FromString(Username));
@@ -134,6 +170,20 @@ void UUserProfileWidget::OnLogoutClicked()
 		GameInstance->Logout();
 		// When widget is embedded in other layouts (tabs) we don't remove it;
 		// auth state handler will clear fields or hide as needed.
+	}
+}
+
+void UUserProfileWidget::OnEditProfileClicked()
+{
+	if (ProfileEditWidget)
+	{
+		// make sure editor is populated and visible
+		UMyOnlineGameInstance* GI = Cast<UMyOnlineGameInstance>(GetGameInstance());
+		if (GI)
+		{
+			ProfileEditWidget->SetProfileData(GI->GetCurrentUserProfile());
+		}
+		ProfileEditWidget->SetVisibility(ESlateVisibility::Visible);
 	}
 }
 

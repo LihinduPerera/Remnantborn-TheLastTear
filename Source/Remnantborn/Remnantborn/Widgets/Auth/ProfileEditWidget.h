@@ -23,9 +23,6 @@ public:
 	void SetProfileData(const FUserProfile& Profile);
     
 	UFUNCTION(BlueprintCallable)
-	void OnEditClicked();
-    
-	UFUNCTION(BlueprintCallable)
 	void OnSaveClicked();
     
 	UFUNCTION(BlueprintCallable)
@@ -33,9 +30,7 @@ public:
     
 	UFUNCTION(BlueprintCallable)
 	void OnChangeAvatarClicked();
-    
-	UFUNCTION(BlueprintCallable)
-	void OnLogoutClicked();
+
 
 	UFUNCTION(BlueprintCallable)
 	void UploadSelectedAvatar(FString FilePath);
@@ -50,7 +45,6 @@ protected:
 	virtual void NativeDestruct() override;
     
 private:
-	void SetEditMode(bool bEditMode);
 	void UpdateDisplayWithProfile();
 
 	// avatar download helper
@@ -61,9 +55,6 @@ private:
 	UImage* AvatarImage;
     
 	UPROPERTY(meta = (BindWidget))
-	UButton* EditButton;
-    
-	UPROPERTY(meta = (BindWidget))
 	UButton* SaveButton;
     
 	UPROPERTY(meta = (BindWidget))
@@ -72,8 +63,7 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	UButton* ChangeAvatarButton;
     
-	UPROPERTY(meta = (BindWidget))
-	UButton* LogoutButton;
+
     
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* UsernameText;
@@ -94,9 +84,6 @@ private:
 	UTextBlock* CreatedAtText;
     
 	UPROPERTY(meta = (BindWidget))
-	UTextBlock* EditButtonText;
-    
-	UPROPERTY(meta = (BindWidget))
 	UTextBlock* StatusText;
     
 	UPROPERTY(meta = (BindWidget))
@@ -115,5 +102,4 @@ private:
 	UProgressBar* LoadingBar;
     
 	FUserProfile CurrentProfile;
-	bool bIsEditMode = false;
 };
