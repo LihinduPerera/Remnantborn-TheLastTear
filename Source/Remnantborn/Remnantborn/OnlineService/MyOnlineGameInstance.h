@@ -18,6 +18,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSessionDestroyed);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAuthStateChanged, bool, bIsLoggedIn);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnProfileUpdated, const FUserProfile&, UserProfile);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnMatchRewardReceived, int32, RewardAmount, int32, NewRemnantCount, bool, bIsWinner);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAvatarUploadComplete, bool, bSuccess);
 
 USTRUCT(BlueprintType)
 struct FSessionInfo
@@ -226,6 +227,11 @@ public:
     
     UFUNCTION(BlueprintCallable, Category = "Authentication")
     void UploadAvatar(const FString& FilePath);
+
+    // convenience helper that shows the desktop file dialog and returns a path to an image file
+    // returns true when the user picked a file, false otherwise (cancelled or error)
+    UFUNCTION(BlueprintCallable, Category = "Utilities")
+    bool PickImageFile(FString& OutFilePath);
     
     UFUNCTION(BlueprintCallable, Category = "Authentication")
     void UpdateGameStats(int32 Level, int32 RemnantCount, const FString& Operation = "set");
@@ -247,6 +253,10 @@ public:
     UEdsHttpService* GetHttpService() const { return HttpService; }
     
     // === Multiplayer Events ===
+    // avatar upload notification (true on success)
+    UPROPERTY(BlueprintAssignable, Category = "Authentication|Events")
+    FOnAvatarUploadComplete OnAvatarUploadComplete;
+
     UPROPERTY(BlueprintAssignable, Category = "Multiplayer|Events")
     FOnSessionSearchCompleted OnSessionSearchCompleted;
     

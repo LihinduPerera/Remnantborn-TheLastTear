@@ -6,6 +6,14 @@
 #include "Components/Image.h"
 #include "Components/Button.h"
 #include "Components/ScrollBox.h"
+#include "Engine/Texture2D.h"
+
+#include "HttpModule.h"
+#include "Interfaces/IHttpRequest.h"
+#include "Interfaces/IHttpResponse.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
+#include "Modules/ModuleManager.h"
 
 void UUserProfileWidget::NativeConstruct()
 {
@@ -70,11 +78,9 @@ void UUserProfileWidget::UpdateProfile(const FString& Username, int32 Level, int
 		MemberSinceText->SetText(FText::FromString(CreatedAt.IsEmpty() ? TEXT("") : FString::Printf(TEXT("Member since: %s"), *CreatedAt.Left(10))));
 	}
     
-	// Store avatar URL for potential loading
+	// Store avatar URL and begin asynchronous load
 	CurrentAvatarUrl = AvatarUrl;
-    
-	// Note: Loading images from URL requires additional setup
-	// You might want to implement an async image loader or use a placeholder
+	LoadAvatarFromUrl(AvatarUrl);
 
 	PopulateOwnedCharacters();
 }
@@ -172,4 +178,66 @@ void UUserProfileWidget::HandleAuthStateChanged(bool bIsLoggedIn)
 			CharacterScrollBox->ClearChildren();
 		}
 	}
+}
+// -------------------------------------------------
+// Avatar download helpers
+// -------------------------------------------------
+
+void UUserProfileWidget::LoadAvatarFromUrl(const FString& Url)
+{
+    if (Url.IsEmpty() || !AvatarImage)
+    {
+        return;
+    }
+
+    FHttpModule* Http = &FHttpModule::Get();
+    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = Http->CreateRequest();
+    Request->SetURL(Url);
+    Request->SetVerb(TEXT("GET"));
+    Request->OnProcessRequestComplete().BindUObject(this, &UUserProfileWidget::OnAvatarDownloaded);
+    Request->ProcessRequest();
+}
+
+void UUserProfileWidget::OnAvatarDownloaded(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bSuccess)
+{
+    if (!bSuccess || !Response.IsValid() || Response->GetResponseCode() != 200)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to download avatar image"));
+        return;
+    }
+
+    TArray<uint8> ImageData = Response->GetContent();
+    if (ImageData.Num() == 0)
+    {
+        return;
+    }
+
+    IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+    EImageFormat Format = EImageFormat::JPEG;
+    if (CurrentAvatarUrl.EndsWith(TEXT(".png")) || CurrentAvatarUrl.EndsWith(TEXT(".PNG")))
+    {
+        Format = EImageFormat::PNG;
+    }
+    // GIF files are not supported by the engine; treat them like PNG as a fallback or skip
+    // any GIF-specific macro logic has been removed to avoid "Cannot resolve symbol 'GIF'".
+
+    TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(Format);
+    if (ImageWrapper.IsValid() && ImageWrapper->SetCompressed(ImageData.GetData(), ImageData.Num()))
+    {
+        TArray<uint8> RawData;
+        if (ImageWrapper->GetRaw(ERGBFormat::BGRA, 8, RawData) && RawData.Num() > 0)
+        {
+            int32 Width = ImageWrapper->GetWidth();
+            int32 Height = ImageWrapper->GetHeight();
+            UTexture2D* Texture = UTexture2D::CreateTransient(Width, Height, PF_B8G8R8A8);
+            if (Texture && Texture->GetPlatformData() && Texture->GetPlatformData()->Mips.Num() > 0)
+            {
+                void* TextureData = Texture->GetPlatformData()->Mips[0].BulkData.Lock(LOCK_READ_WRITE);
+                FMemory::Memcpy(TextureData, RawData.GetData(), RawData.Num());
+                Texture->GetPlatformData()->Mips[0].BulkData.Unlock();
+                Texture->UpdateResource();
+                AvatarImage->SetBrushFromTexture(Texture, true);
+            }
+        }
+    }
 }

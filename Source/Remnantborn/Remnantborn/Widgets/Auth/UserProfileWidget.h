@@ -6,6 +6,7 @@
 #include "Components/Image.h"
 #include "Components/Button.h"
 #include "Components/ScrollBox.h"
+#include "Interfaces/IHttpRequest.h"
 #include "UserProfileWidget.generated.h"
 
 class UOwnedCharacterCardWidget;
@@ -75,4 +76,9 @@ public:
     
 private:
 	FString CurrentAvatarUrl;
+
+	// download helper
+	void LoadAvatarFromUrl(const FString& Url);
+	void OnAvatarDownloaded(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bSuccess);
+
 };

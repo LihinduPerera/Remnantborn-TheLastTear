@@ -6,6 +6,16 @@
 #include "Components/EditableTextBox.h"
 #include "Components/VerticalBox.h"
 #include "Components/ProgressBar.h"
+#include "HttpModule.h"
+#include "Interfaces/IHttpRequest.h"
+#include "Interfaces/IHttpResponse.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
+#include "Modules/ModuleManager.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Engine/Texture2D.h"
+
 
 void UProfileEditWidget::NativeConstruct()
 {
@@ -40,6 +50,7 @@ void UProfileEditWidget::NativeConstruct()
 	if (GameInstance)
 	{
 		GameInstance->OnProfileUpdated.AddDynamic(this, &UProfileEditWidget::OnProfileUpdated);
+        GameInstance->OnAvatarUploadComplete.AddDynamic(this, &UProfileEditWidget::OnUploadAvatarComplete);
         
 		if (GameInstance->IsLoggedIn())
 		{
@@ -63,6 +74,7 @@ void UProfileEditWidget::NativeDestruct()
 	if (GameInstance)
 	{
 		GameInstance->OnProfileUpdated.RemoveDynamic(this, &UProfileEditWidget::OnProfileUpdated);
+        GameInstance->OnAvatarUploadComplete.RemoveDynamic(this, &UProfileEditWidget::OnUploadAvatarComplete);
 	}
 }
 
@@ -74,58 +86,61 @@ void UProfileEditWidget::SetProfileData(const FUserProfile& Profile)
 
 void UProfileEditWidget::UpdateDisplayWithProfile()
 {
-	if (UsernameText)
-	{
-		UsernameText->SetText(FText::FromString(CurrentProfile.Username));
-	}
+    if (UsernameText)
+    {
+        UsernameText->SetText(FText::FromString(CurrentProfile.Username));
+    }
     
-	if (LevelText)
-	{
-		LevelText->SetText(FText::FromString(FString::Printf(TEXT("Level: %d"), CurrentProfile.Level)));
-	}
+    if (LevelText)
+    {
+        LevelText->SetText(FText::FromString(FString::Printf(TEXT("Level: %d"), CurrentProfile.Level)));
+    }
     
-	if (RemnantText)
-	{
-		RemnantText->SetText(FText::FromString(FString::Printf(TEXT("Remnants: %d"), CurrentProfile.RemnantCount)));
-	}
+    if (RemnantText)
+    {
+        RemnantText->SetText(FText::FromString(FString::Printf(TEXT("Remnants: %d"), CurrentProfile.RemnantCount)));
+    }
     
-	if (EmailText && CurrentProfile.bIsValid)
-	{
-		EmailText->SetText(FText::FromString(CurrentProfile.Email));
-	}
+    if (EmailText && CurrentProfile.bIsValid)
+    {
+        EmailText->SetText(FText::FromString(CurrentProfile.Email));
+    }
     
-	if (BioText)
-	{
-		FString Bio = CurrentProfile.Bio.IsEmpty() ? TEXT("No bio set") : CurrentProfile.Bio;
-		BioText->SetText(FText::FromString(Bio));
-	}
+    if (BioText)
+    {
+        FString Bio = CurrentProfile.Bio.IsEmpty() ? TEXT("No bio set") : CurrentProfile.Bio;
+        BioText->SetText(FText::FromString(Bio));
+    }
     
-	if (CreatedAtText)
-	{
-		if (!CurrentProfile.CreatedAt.IsEmpty())
-		{
-			CreatedAtText->SetText(FText::FromString(FString::Printf(TEXT("Member since: %s"), *CurrentProfile.CreatedAt)));
-		}
-		else
-		{
-			CreatedAtText->SetText(FText::FromString(TEXT("Member since: Unknown")));
-		}
-	}
+    if (CreatedAtText)
+    {
+        if (!CurrentProfile.CreatedAt.IsEmpty())
+        {
+            CreatedAtText->SetText(FText::FromString(FString::Printf(TEXT("Member since: %s"), *CurrentProfile.CreatedAt)));
+        }
+        else
+        {
+            CreatedAtText->SetText(FText::FromString(TEXT("Member since: Unknown")));
+        }
+    }
     
-	if (UsernameInput)
-	{
-		UsernameInput->SetText(FText::FromString(CurrentProfile.Username));
-	}
+    if (UsernameInput)
+    {
+        UsernameInput->SetText(FText::FromString(CurrentProfile.Username));
+    }
     
-	if (BioInput)
-	{
-		BioInput->SetText(FText::FromString(CurrentProfile.Bio));
-	}
+    if (BioInput)
+    {
+        BioInput->SetText(FText::FromString(CurrentProfile.Bio));
+    }
     
-	if (StatusText)
-	{
-		StatusText->SetText(FText::FromString(TEXT("")));
-	}
+    if (StatusText)
+    {
+        StatusText->SetText(FText::FromString(TEXT("")));
+    }
+
+    // try load avatar if we have an url
+    LoadAvatarFromUrl(CurrentProfile.AvatarUrl);
 }
 
 void UProfileEditWidget::SetEditMode(bool bEditMode)
@@ -229,56 +244,55 @@ void UProfileEditWidget::OnCancelClicked()
 
 void UProfileEditWidget::OnChangeAvatarClicked()
 {
-	UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
-	if (!GameInstance)
-	{
-		return;
-	}
+    UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+    if (!GameInstance)
+    {
+        return;
+    }
 
-	if (StatusText)
-	{
-		StatusText->SetText(FText::FromString(TEXT("Avatar selection coming soon...")));
-	}
-
-	/* 
-	 * Avatar selection implementation options:
-	 * 1. Use a UMG ListView with pre-defined avatar options
-	 * 2. Implement a Blueprint-callable function to pass the selected file path
-	 * 3. Use platform-specific file picker
-	 * 
-	 * For now, you can call GameInstance->UploadAvatar(FullPath) from Blueprint
-	 * after the user selects an image through a file picker widget.
-	 */
+    FString SelectedPath;
+    if (GameInstance->PickImageFile(SelectedPath))
+    {
+        // automatically upload once chosen
+        UploadSelectedAvatar(SelectedPath);
+    }
+    else
+    {
+        if (StatusText)
+        {
+            StatusText->SetText(FText::FromString(TEXT("No file selected")));
+        }
+    }
 }
 
 void UProfileEditWidget::UploadSelectedAvatar(FString FilePath)
 {
-	if (FilePath.IsEmpty())
-	{
-		if (StatusText)
-		{
-			StatusText->SetText(FText::FromString(TEXT("Please select an image file")));
-		}
-		return;
-	}
+    if (FilePath.IsEmpty())
+    {
+        if (StatusText)
+        {
+            StatusText->SetText(FText::FromString(TEXT("Please select an image file")));
+        }
+        return;
+    }
 
-	UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
-	if (!GameInstance)
-	{
-		return;
-	}
+    UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+    if (!GameInstance)
+    {
+        return;
+    }
 
-	if (LoadingBar)
-	{
-		LoadingBar->SetVisibility(ESlateVisibility::Visible);
-	}
+    if (LoadingBar)
+    {
+        LoadingBar->SetVisibility(ESlateVisibility::Visible);
+    }
 
-	if (StatusText)
-	{
-		StatusText->SetText(FText::FromString(TEXT("Uploading avatar...")));
-	}
+    if (StatusText)
+    {
+        StatusText->SetText(FText::FromString(TEXT("Uploading avatar...")));
+    }
 
-	GameInstance->UploadAvatar(FilePath);
+    GameInstance->UploadAvatar(FilePath);
 }
 
 void UProfileEditWidget::OnLogoutClicked()
@@ -309,20 +323,83 @@ void UProfileEditWidget::OnProfileUpdated(const FUserProfile& Profile)
 
 void UProfileEditWidget::OnUploadAvatarComplete(bool bSuccess)
 {
-	if (LoadingBar)
-	{
-		LoadingBar->SetVisibility(ESlateVisibility::Collapsed);
-	}
+    if (LoadingBar)
+    {
+        LoadingBar->SetVisibility(ESlateVisibility::Collapsed);
+    }
     
-	if (StatusText)
-	{
-		if (bSuccess)
-		{
-			StatusText->SetText(FText::FromString(TEXT("Avatar uploaded!")));
-		}
-		else
-		{
-			StatusText->SetText(FText::FromString(TEXT("Failed to upload avatar")));
-		}
-	}
+    if (StatusText)
+    {
+        if (bSuccess)
+        {
+            StatusText->SetText(FText::FromString(TEXT("Avatar uploaded!")));
+        }
+        else
+        {
+            StatusText->SetText(FText::FromString(TEXT("Failed to upload avatar")));
+        }
+    }
+}
+
+// -------------------------------------------------
+// Avatar download helpers (same pattern as UserProfileWidget)
+// -------------------------------------------------
+
+void UProfileEditWidget::LoadAvatarFromUrl(const FString& Url)
+{
+    if (Url.IsEmpty() || !AvatarImage)
+    {
+        return;
+    }
+
+    FHttpModule* Http = &FHttpModule::Get();
+    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = Http->CreateRequest();
+    Request->SetURL(Url);
+    Request->SetVerb(TEXT("GET"));
+    Request->OnProcessRequestComplete().BindUObject(this, &UProfileEditWidget::OnAvatarDownloaded);
+    Request->ProcessRequest();
+}
+
+void UProfileEditWidget::OnAvatarDownloaded(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bSuccess)
+{
+    if (!bSuccess || !Response.IsValid() || Response->GetResponseCode() != 200)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to download avatar image"));
+        return;
+    }
+
+    TArray<uint8> ImageData = Response->GetContent();
+    if (ImageData.Num() == 0)
+    {
+        return;
+    }
+
+    IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+    EImageFormat Format = EImageFormat::JPEG;
+    FString AvatarUrl = CurrentProfile.AvatarUrl;
+    if (AvatarUrl.EndsWith(TEXT(".png")) || AvatarUrl.EndsWith(TEXT(".PNG")))
+    {
+        Format = EImageFormat::PNG;
+    }
+    // GIF format is not supported by the engine; we simply leave Format as JPEG (or PNG above) and skip any macro logic
+
+    TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(Format);
+    if (ImageWrapper.IsValid() && ImageWrapper->SetCompressed(ImageData.GetData(), ImageData.Num()))
+    {
+        TArray<uint8> RawData;
+        if (ImageWrapper->GetRaw(ERGBFormat::BGRA, 8, RawData) && RawData.Num() > 0)
+        {
+            int32 Width = ImageWrapper->GetWidth();
+            int32 Height = ImageWrapper->GetHeight();
+            UTexture2D* Texture = UTexture2D::CreateTransient(Width, Height, PF_B8G8R8A8);
+            if (Texture && Texture->GetPlatformData() && Texture->GetPlatformData()->Mips.Num() > 0)
+            {
+                void* TextureData = Texture->GetPlatformData()->Mips[0].BulkData.Lock(LOCK_READ_WRITE);
+                FMemory::Memcpy(TextureData, RawData.GetData(), RawData.Num());
+                Texture->GetPlatformData()->Mips[0].BulkData.Unlock();
+                Texture->UpdateResource();
+                AvatarImage->SetBrushFromTexture(Texture, true);
+            }
+        }
+    }
 }

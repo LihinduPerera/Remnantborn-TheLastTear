@@ -8,6 +8,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundCue.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
+#include "DesktopPlatformModule.h"
+#include "IDesktopPlatform.h"
 
 UMyOnlineGameInstance::UMyOnlineGameInstance()
 {
@@ -990,12 +992,47 @@ void UMyOnlineGameInstance::UploadAvatar(const FString& FilePath)
             // Update the current profile with the new avatar URL
             CurrentUserProfile.AvatarUrl = Response.AvatarUrl;
             OnProfileUpdated.Broadcast(CurrentUserProfile);
+
+            // let any listeners know upload finished
+            OnAvatarUploadComplete.Broadcast(true);
+
+            // refresh profile from backend to make sure all other fields (updated_at, etc.) are synced
+            GetUserProfile();
         }
         else
         {
             UE_LOG(LogTemp, Warning, TEXT("Failed to upload avatar: %s"), *Response.ErrorMessage);
+            OnAvatarUploadComplete.Broadcast(false);
         }
     }));
+}
+
+bool UMyOnlineGameInstance::PickImageFile(FString& OutFilePath)
+{
+    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+    if (!DesktopPlatform)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DesktopPlatform not available"));
+        return false;
+    }
+
+    void* ParentWindowHandle = nullptr;
+    TArray<FString> OutFiles;
+    const bool bResult = DesktopPlatform->OpenFileDialog(
+        ParentWindowHandle,
+        TEXT("Select Avatar Image"),
+        TEXT(""),
+        TEXT(""),
+        TEXT("Image Files (*.png;*.jpg;*.jpeg;*.gif;*.webp)|*.png;*.jpg;*.jpeg;*.gif;*.webp"),
+        EFileDialogFlags::None,
+        OutFiles);
+    
+    if (bResult && OutFiles.Num() > 0)
+    {
+        OutFilePath = OutFiles[0];
+        return true;
+    }
+    return false;
 }
 
 void UMyOnlineGameInstance::UpdateGameStats(int32 Level, int32 RemnantCount, const FString& Operation)

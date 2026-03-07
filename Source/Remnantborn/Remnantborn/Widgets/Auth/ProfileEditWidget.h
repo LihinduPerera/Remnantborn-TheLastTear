@@ -52,6 +52,10 @@ protected:
 private:
 	void SetEditMode(bool bEditMode);
 	void UpdateDisplayWithProfile();
+
+	// avatar download helper
+	void LoadAvatarFromUrl(const FString& Url);
+	void OnAvatarDownloaded(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bSuccess);
     
 	UPROPERTY(meta = (BindWidget))
 	UImage* AvatarImage;

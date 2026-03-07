@@ -667,33 +667,9 @@ void UEdsHttpService::SendMultipartRequest(const FString& Endpoint, const FStrin
         return;
     }
     
-    FHttpModule& HttpModule = FHttpModule::Get();
-    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = HttpModule.CreateRequest();
-    
-    FString FullUrl = BaseUrl + Endpoint;
-    Request->SetURL(FullUrl);
-    Request->SetVerb(TEXT("POST"));
-    Request->SetTimeout(30);
-    Request->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *AuthToken));
-    
-    // Read file content
+    // prepare file
     TArray<uint8> FileData;
-    if (FFileHelper::LoadFileToArray(FileData, *FilePath))
-    {
-        FString FileName = FPaths::GetCleanFilename(FilePath);
-        FString ContentType = TEXT("application/octet-stream");
-        
-        if (FileName.EndsWith(TEXT(".png")) || FileName.EndsWith(TEXT(".PNG")))
-            ContentType = TEXT("image/png");
-        else if (FileName.EndsWith(TEXT(".jpg")) || FileName.EndsWith(TEXT(".jpeg")) || FileName.EndsWith(TEXT(".JPG")) || FileName.EndsWith(TEXT(".JPEG")))
-            ContentType = TEXT("image/jpeg");
-        else if (FileName.EndsWith(TEXT(".gif")))
-            ContentType = TEXT("image/gif");
-        
-        Request->SetHeader(TEXT("Content-Type"), ContentType);
-        Request->SetContent(FileData);
-    }
-    else
+    if (!FFileHelper::LoadFileToArray(FileData, *FilePath))
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to read file: %s"), *FilePath);
         if (Callback)
@@ -705,6 +681,48 @@ void UEdsHttpService::SendMultipartRequest(const FString& Endpoint, const FStrin
         }
         return;
     }
+
+    FString FileName = FPaths::GetCleanFilename(FilePath);
+    FString ContentType = TEXT("application/octet-stream");
+    if (FileName.EndsWith(TEXT(".png")) || FileName.EndsWith(TEXT(".PNG")))
+        ContentType = TEXT("image/png");
+    else if (FileName.EndsWith(TEXT(".jpg")) || FileName.EndsWith(TEXT(".jpeg")) || FileName.EndsWith(TEXT(".JPG")) || FileName.EndsWith(TEXT(".JPEG")))
+        ContentType = TEXT("image/jpeg");
+    else if (FileName.EndsWith(TEXT(".gif")))
+        ContentType = TEXT("image/gif");
+    
+    // build multipart body
+    FString Boundary = TEXT("----WebKitFormBoundary") + FGuid::NewGuid().ToString();
+    FString Header = FString::Printf(TEXT("--%s\r\n"), *Boundary);
+    Header += FString::Printf(TEXT("Content-Disposition: form-data; name=\"%s\"; filename=\"%s\"\r\n"), *FieldName, *FileName);
+    Header += FString::Printf(TEXT("Content-Type: %s\r\n\r\n"), *ContentType);
+
+    FString Footer = FString::Printf(TEXT("\r\n--%s--\r\n"), *Boundary);
+
+    TArray<uint8> Content;
+    // append header
+    {
+        FTCHARToUTF8 Convert(*Header);
+        Content.Append((uint8*)Convert.Get(), Convert.Length());
+    }
+    // append file data
+    Content.Append(FileData);
+    // append footer
+    {
+        FTCHARToUTF8 Convert(*Footer);
+        Content.Append((uint8*)Convert.Get(), Convert.Length());
+    }
+
+    FHttpModule& HttpModule = FHttpModule::Get();
+    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = HttpModule.CreateRequest();
+    
+    FString FullUrl = BaseUrl + Endpoint;
+    Request->SetURL(FullUrl);
+    Request->SetVerb(TEXT("POST"));
+    Request->SetTimeout(30);
+    Request->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *AuthToken));
+    Request->SetHeader(TEXT("Content-Type"), FString::Printf(TEXT("multipart/form-data; boundary=%s"), *Boundary));
+    Request->SetContent(Content);
     
     Request->OnProcessRequestComplete().BindLambda([Callback](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bSuccess)
     {

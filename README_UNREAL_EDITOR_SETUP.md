@@ -108,6 +108,7 @@ Required bound widgets:
 - `RemnantText` (TextBlock)
 - `EmailText` (TextBlock)
 - `AvatarImage` (Image)
+- `ChangeAvatarButton` (Button) **(opens OS file dialog and uploads to Cloudinary)**
 - `LogoutButton` (Button)
 - `RefreshButton` (Button)
 
@@ -118,6 +119,10 @@ Optional but now supported (recommended):
 
 In Class Defaults:
 - Set `OwnedCharacterCardClass` = `WBP_OwnedCharacterCard`
+
+Additional notes:
+- The profile edit screen now allows users to pick an image from disk; the blueprint function `PickImageFile` on the game instance invokes the native file picker. After choosing an image the widget automatically uploads the file via `UploadAvatar`.
+- Make sure Cloudinary environment variables (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`) are configured on the backend server.
 
 ## 2.7 Match Results Widget updates
 
