@@ -116,6 +116,10 @@ struct FStoreCharacterInfo
 {
     GENERATED_BODY()
 
+    // type of item returned by the backend ("character", "skin", etc.)
+    UPROPERTY(BlueprintReadWrite, Category = "Store")
+    FString ItemType = TEXT("");
+
     UPROPERTY(BlueprintReadWrite, Category = "Store")
     FString ItemId;
 

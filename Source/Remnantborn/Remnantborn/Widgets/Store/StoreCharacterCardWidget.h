@@ -8,6 +8,7 @@
 class UButton;
 class UImage;
 class UTextBlock;
+class UCharacterDataAsset;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStoreCharacterPurchaseRequested, const FString&, CharacterId);
 
@@ -18,7 +19,7 @@ class REMNANTBORN_API UStoreCharacterCardWidget : public UUserWidget
 
 public:
     UFUNCTION(BlueprintCallable, Category = "Store")
-    void InitializeCard(const FStoreCharacterInfo& CharacterInfo);
+    void InitializeCard(const FStoreCharacterInfo& CharacterInfo, UCharacterDataAsset* LocalData = nullptr);
 
     UFUNCTION(BlueprintCallable, Category = "Store")
     void SetOwned(bool bOwned);
@@ -51,5 +52,9 @@ private:
     UFUNCTION()
     void OnBuyClicked();
 
+    // keep the last record of info and the associated data asset (if any)
     FStoreCharacterInfo CachedInfo;
+
+    UPROPERTY()
+    UCharacterDataAsset* CachedCharacterData = nullptr;
 };

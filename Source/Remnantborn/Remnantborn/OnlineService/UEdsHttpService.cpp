@@ -181,6 +181,8 @@ void UEdsHttpService::GetStoreCharacters(const FString& AuthToken, FOnStoreChara
 
                             const TSharedPtr<FJsonObject>& CharacterObj = *CharacterObjPtr;
                             FStoreCharacterInfo CharacterInfo;
+                            // parse type first so callers can decide how to treat the item
+                            CharacterObj->TryGetStringField(TEXT("item_type"), CharacterInfo.ItemType);
                             CharacterObj->TryGetStringField(TEXT("item_id"), CharacterInfo.ItemId);
                             CharacterObj->TryGetStringField(TEXT("name"), CharacterInfo.Name);
                             CharacterObj->TryGetStringField(TEXT("description"), CharacterInfo.Description);

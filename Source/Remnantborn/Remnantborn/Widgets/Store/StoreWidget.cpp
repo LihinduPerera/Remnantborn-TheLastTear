@@ -6,6 +6,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "StoreCharacterCardWidget.h"
 #include "Remnantborn/Remnantborn/Store/StoreSubsystem.h"
+#include "Remnantborn/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
 #include "Remnantborn/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 
 void UStoreWidget::NativeConstruct()
@@ -62,6 +63,10 @@ void UStoreWidget::HandleCatalogLoaded(const TArray<FStoreCharacterInfo>& Charac
         return;
     }
 
+    
+    // early grab the character subsystem once to avoid repeatedly querying
+    UCharacterSelectionSubsystem* CharSub = GetGameInstance() ? GetGameInstance()->GetSubsystem<UCharacterSelectionSubsystem>() : nullptr;
+
     for (const FStoreCharacterInfo& Character : Characters)
     {
         UStoreCharacterCardWidget* Card = CreateWidget<UStoreCharacterCardWidget>(this, StoreCharacterCardClass);
@@ -70,7 +75,14 @@ void UStoreWidget::HandleCatalogLoaded(const TArray<FStoreCharacterInfo>& Charac
             continue;
         }
 
-        Card->InitializeCard(Character);
+        // try to resolve local data asset if this is a character item
+        UCharacterDataAsset* LocalData = nullptr;
+        if (CharSub && Character.ItemType.Equals(TEXT("character"), ESearchCase::IgnoreCase))
+        {
+            LocalData = CharSub->GetCharacterByID(FName(*Character.ItemId));
+        }
+
+        Card->InitializeCard(Character, LocalData);
         Card->OnPurchaseRequested.AddDynamic(this, &UStoreWidget::OnCharacterPurchaseRequested);
         CharacterGrid->AddChildToWrapBox(Card);
     }

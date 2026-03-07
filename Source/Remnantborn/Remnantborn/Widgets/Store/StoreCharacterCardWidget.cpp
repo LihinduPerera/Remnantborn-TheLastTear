@@ -2,6 +2,8 @@
 
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Components/Image.h"  // for UImage methods
+#include "Remnantborn/Remnantborn/CharacterSelection/CharacterDataAsset.h"  // for asset pointer
 
 void UStoreCharacterCardWidget::NativeConstruct()
 {
@@ -13,9 +15,20 @@ void UStoreCharacterCardWidget::NativeConstruct()
     }
 }
 
-void UStoreCharacterCardWidget::InitializeCard(const FStoreCharacterInfo& CharacterInfo)
+void UStoreCharacterCardWidget::InitializeCard(const FStoreCharacterInfo& CharacterInfo, UCharacterDataAsset* LocalData)
 {
     CachedInfo = CharacterInfo;
+    CachedCharacterData = LocalData;
+
+    // set portrait from asset if available, otherwise leave it to the blueprint/web logic
+    if (CharacterPortrait)
+    {
+        if (LocalData && LocalData->CharacterPortrait)
+        {
+            CharacterPortrait->SetBrushFromTexture(LocalData->CharacterPortrait);
+        }
+        // else: blueprint may bind to CachedInfo.ImageUrl or other mechanisms
+    }
 
     if (CharacterName)
     {
