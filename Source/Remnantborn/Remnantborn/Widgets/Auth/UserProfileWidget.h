@@ -20,7 +20,7 @@ public:
     
 	// Update the widget with user data
 	UFUNCTION(BlueprintCallable)
-	void UpdateProfile(const FString& Username, int32 Level, int32 RemnantCount, const FString& AvatarUrl = "", const FString& Bio = "", const FString& CreatedAt = "");
+	void UpdateProfile(const FString& Username, int32 Level, int32 RemnantCount, const FString& AvatarUrl = "", const FString& Email = "", const FString& Bio = "", const FString& CreatedAt = "");
 
 	UFUNCTION(BlueprintCallable)
 	void PopulateOwnedCharacters();
@@ -31,6 +31,13 @@ public:
     
 	UFUNCTION()
 	void OnRefreshClicked();
+
+	// callbacks from GameInstance
+	UFUNCTION()
+	void HandleProfileUpdated(const FUserProfile& UserProfile);
+
+	UFUNCTION()
+	void HandleAuthStateChanged(bool bIsLoggedIn);
     
 	// Widget components
 	UPROPERTY(meta = (BindWidget))

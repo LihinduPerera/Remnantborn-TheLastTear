@@ -300,7 +300,8 @@ void UMainMenuWidget::OnProfileButtonClicked()
                 CurrentUserProfile.Username,
                 CurrentUserProfile.Level,
                 CurrentUserProfile.RemnantCount,
-                CurrentUserProfile.AvatarUrl
+                CurrentUserProfile.AvatarUrl,
+                CurrentUserProfile.Email
             );
         }
     }

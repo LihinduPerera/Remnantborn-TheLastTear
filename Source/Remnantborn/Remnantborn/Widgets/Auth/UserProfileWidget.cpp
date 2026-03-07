@@ -21,23 +21,43 @@ void UUserProfileWidget::NativeConstruct()
 	{
 		RefreshButton->OnClicked.AddDynamic(this, &UUserProfileWidget::OnRefreshClicked);
 	}
+
+	// Subscribe to profile/auth changes so widget works anywhere (tabs, menus, etc.)
+	UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+	if (GameInstance)
+	{
+		GameInstance->OnProfileUpdated.AddDynamic(this, &UUserProfileWidget::HandleProfileUpdated);
+		GameInstance->OnAuthStateChanged.AddDynamic(this, &UUserProfileWidget::HandleAuthStateChanged);
+
+		// initialize display with current profile if already present
+		const FUserProfile& Existing = GameInstance->GetCurrentUserProfile();
+		if (Existing.bIsValid)
+		{
+			HandleProfileUpdated(Existing);
+		}
+	}
 }
 
-void UUserProfileWidget::UpdateProfile(const FString& Username, int32 Level, int32 RemnantCount, const FString& AvatarUrl, const FString& Bio, const FString& CreatedAt)
+void UUserProfileWidget::UpdateProfile(const FString& Username, int32 Level, int32 RemnantCount, const FString& AvatarUrl, const FString& Email, const FString& Bio, const FString& CreatedAt)
 {
-	if (UsernameText)
-	{
-		UsernameText->SetText(FText::FromString(Username));
-	}
+    if (UsernameText)
+    {
+        UsernameText->SetText(FText::FromString(Username));
+    }
     
-	if (LevelText)
-	{
-		LevelText->SetText(FText::FromString(FString::Printf(TEXT("Level: %d"), Level)));
-	}
+    if (LevelText)
+    {
+        LevelText->SetText(FText::FromString(FString::Printf(TEXT("Level: %d"), Level)));
+    }
     
-	if (RemnantText)
-	{
-		RemnantText->SetText(FText::FromString(FString::Printf(TEXT("Remnants: %d"), RemnantCount)));
+    if (RemnantText)
+    {
+        RemnantText->SetText(FText::FromString(FString::Printf(TEXT("Remnants: %d"), RemnantCount)));
+    }
+
+    if (EmailText)
+    {
+        EmailText->SetText(FText::FromString(Email));
 	}
 
 	if (BioText)
@@ -106,7 +126,8 @@ void UUserProfileWidget::OnLogoutClicked()
 	if (GameInstance)
 	{
 		GameInstance->Logout();
-		RemoveFromParent(); // Hide profile widget after logout
+		// When widget is embedded in other layouts (tabs) we don't remove it;
+		// auth state handler will clear fields or hide as needed.
 	}
 }
 
@@ -116,5 +137,39 @@ void UUserProfileWidget::OnRefreshClicked()
 	if (GameInstance)
 	{
 		GameInstance->GetUserProfile();
+	}
+}
+
+// -------------------------------------------------
+// Game instance callbacks
+// -------------------------------------------------
+
+void UUserProfileWidget::HandleProfileUpdated(const FUserProfile& UserProfile)
+{
+	// update UI whenever GameInstance broadcasts a new profile
+	if (UserProfile.bIsValid)
+	{
+		UpdateProfile(
+			UserProfile.Username,
+			UserProfile.Level,
+			UserProfile.RemnantCount,
+			UserProfile.AvatarUrl,
+			UserProfile.Email,
+			UserProfile.Bio,
+			UserProfile.CreatedAt
+		);
+	}
+}
+
+void UUserProfileWidget::HandleAuthStateChanged(bool bIsLoggedIn)
+{
+	if (!bIsLoggedIn)
+	{
+		// logged out state – clear fields and owned characters list
+		UpdateProfile(TEXT(""), 0, 0, TEXT(""));
+		if (CharacterScrollBox)
+		{
+			CharacterScrollBox->ClearChildren();
+		}
 	}
 }
