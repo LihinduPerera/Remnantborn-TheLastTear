@@ -211,6 +211,8 @@ void UMyOnlineGameInstance::CreateSession(FString SessionName, int32 MaxPlayers)
 {
     PendingSessionName = SessionName;
     PendingMaxPlayers = MaxPlayers;
+    bPendingCreateSessionAfterDestroy = false;
+    bPendingReturnToMainMenu = false;
     LastError = "";
     
     IOnlineSubsystem* OnlineSub = Online::GetSubsystem(GetWorld());
@@ -229,11 +231,13 @@ void UMyOnlineGameInstance::CreateSession(FString SessionName, int32 MaxPlayers)
         return;
     }
     
-    // Destroy existing session if any
+    // Destroy existing session first, then continue creation from OnDestroySessionComplete.
     if (SessionInterface->GetNamedSession(NAME_GameSession))
     {
-        UE_LOG(LogTemp, Warning, TEXT("Destroying existing session before creating new one"));
+        UE_LOG(LogTemp, Warning, TEXT("CreateSession: Existing session found, destroying before re-hosting"));
+        bPendingCreateSessionAfterDestroy = true;
         DestroySession();
+        return;
     }
     
     // Setup LAN session settings
@@ -454,6 +458,8 @@ void UMyOnlineGameInstance::JoinSessionByIndex(int32 SessionIndex)
 void UMyOnlineGameInstance::JoinSessionByResult(const FBlueprintSessionResult& SessionResult)
 {
     LastError = "";
+    bPendingReturnToMainMenu = false;
+    bPendingCreateSessionAfterDestroy = false;
     
     IOnlineSubsystem* OnlineSub = Online::GetSubsystem(GetWorld());
     if (!OnlineSub)
@@ -468,6 +474,16 @@ void UMyOnlineGameInstance::JoinSessionByResult(const FBlueprintSessionResult& S
     {
         LastError = "Session Interface not valid";
         OnJoinSessionFailed.Broadcast(LastError);
+        return;
+    }
+
+    // OSS refuses joining when a local GameSession already exists.
+    if (SessionInterface->GetNamedSession(NAME_GameSession))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("JoinSession: Existing local session found, destroying before joining"));
+        PendingJoinSessionResult = SessionResult;
+        bPendingJoinSessionAfterDestroy = true;
+        DestroySession();
         return;
     }
     
@@ -606,7 +622,28 @@ void UMyOnlineGameInstance::DestroySession()
     // Check if session exists
     if (!SessionInterface->GetNamedSession(NAME_GameSession))
     {
+        bIsHosting = false;
         OnSessionDestroyed.Broadcast();
+
+        // Execute deferred actions immediately when no destroy call is required.
+        if (bPendingCreateSessionAfterDestroy)
+        {
+            ContinueCreateSessionAfterDestroy();
+            return;
+        }
+
+        if (bPendingJoinSessionAfterDestroy)
+        {
+            ContinueJoinSessionAfterDestroy();
+            return;
+        }
+
+        if (bPendingReturnToMainMenu)
+        {
+            bPendingReturnToMainMenu = false;
+            ReturnToMainMenuLevel();
+        }
+
         return;
     }
     
@@ -630,34 +667,97 @@ void UMyOnlineGameInstance::OnDestroySessionComplete(FName SessionName, bool bSu
     if (bSuccess)
     {
         UE_LOG(LogTemp, Log, TEXT("Session destroyed"));
-        bIsHosting = false;
     }
     else
     {
         UE_LOG(LogTemp, Warning, TEXT("Failed to destroy session"));
     }
+
+    bIsHosting = false;
+    const bool bShouldCreateAfterDestroy = bPendingCreateSessionAfterDestroy;
+    const bool bShouldJoinAfterDestroy = bPendingJoinSessionAfterDestroy;
+    const bool bShouldReturnToMainMenu = bPendingReturnToMainMenu;
+    bPendingCreateSessionAfterDestroy = false;
+    bPendingJoinSessionAfterDestroy = false;
+    bPendingReturnToMainMenu = false;
     
     OnSessionDestroyed.Broadcast();
+
+    if (bShouldCreateAfterDestroy)
+    {
+        ContinueCreateSessionAfterDestroy();
+        return;
+    }
+
+    if (bShouldJoinAfterDestroy)
+    {
+        ContinueJoinSessionAfterDestroy();
+        return;
+    }
+
+    if (bShouldReturnToMainMenu)
+    {
+        ReturnToMainMenuLevel();
+    }
 }
 
 void UMyOnlineGameInstance::LeaveGame()
 {
     PrepareForLevelTravel();
 
-    // If we're hosting, destroy the session
-    if (bIsHosting)
-    {
-        DestroySession();
-    }
-
     // Reset music state for menu
     bIsInMatch = false;
     bMatchHasEnded = false;
     CurrentMusicState = EMusicState::Menu;
 
+    // Clear selections from the previous lobby/match lifecycle.
+    ClearLocalCharacterSelection();
+    ClearAllCharacterSelections();
+
+    bPendingCreateSessionAfterDestroy = false;
+    bPendingReturnToMainMenu = true;
+
     UE_LOG(LogTemp, Log, TEXT("LeaveGame: Returning to main menu with music state reset"));
 
-    // Return to main menu
+    // Destroy active session for both host and clients before returning to menu.
+    if (HasNamedGameSession())
+    {
+        DestroySession();
+        return;
+    }
+
+    bPendingReturnToMainMenu = false;
+    ReturnToMainMenuLevel();
+}
+
+bool UMyOnlineGameInstance::HasNamedGameSession() const
+{
+    IOnlineSubsystem* OnlineSub = Online::GetSubsystem(GetWorld());
+    if (!OnlineSub)
+    {
+        return false;
+    }
+
+    IOnlineSessionPtr LocalSessionInterface = OnlineSub->GetSessionInterface();
+    return LocalSessionInterface.IsValid() && LocalSessionInterface->GetNamedSession(NAME_GameSession) != nullptr;
+}
+
+void UMyOnlineGameInstance::ContinueCreateSessionAfterDestroy()
+{
+    bPendingCreateSessionAfterDestroy = false;
+    UE_LOG(LogTemp, Log, TEXT("CreateSession: Previous session destroyed, continuing host flow"));
+    CreateSession(PendingSessionName, PendingMaxPlayers);
+}
+
+void UMyOnlineGameInstance::ContinueJoinSessionAfterDestroy()
+{
+    bPendingJoinSessionAfterDestroy = false;
+    UE_LOG(LogTemp, Log, TEXT("JoinSession: Previous session destroyed, continuing join flow"));
+    JoinSessionByResult(PendingJoinSessionResult);
+}
+
+void UMyOnlineGameInstance::ReturnToMainMenuLevel()
+{
     UGameplayStatics::OpenLevel(this, FName("/Game/Remnantborn/Levels/MainMenu"), true);
 }
 

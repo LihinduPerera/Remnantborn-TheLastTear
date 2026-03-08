@@ -340,18 +340,20 @@ void UMatchResultsWidget::CreatePlayerResultEntry(const FPlayerMatchResult& Play
 
 void UMatchResultsWidget::OnReturnToLobbyClicked()
 {
-    // Stop result music and play menu music
+    // Use the GameInstance leave flow so sessions are destroyed cleanly before returning.
     if (UMyOnlineGameInstance* GameInstance = GetGameInstance<UMyOnlineGameInstance>())
     {
         bool bIsLocal = GetOwningPlayer() ? GetOwningPlayer()->IsLocalController() : false;
         UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Returning to lobby, IsLocal=%d"), bIsLocal);
         GameInstance->OnReturningToLobby();
+        GameInstance->LeaveGame();
+        return;
     }
-    
-    // Return to main menu/lobby
+
+    // Fallback when no custom GameInstance is available.
     if (APlayerController* PC = GetOwningPlayer())
     {
-        UGameplayStatics::OpenLevel(PC, FName("LobbyMap"), true);
+        UGameplayStatics::OpenLevel(PC, FName("/Game/Remnantborn/Levels/MainMenu"), true);
     }
 }
 

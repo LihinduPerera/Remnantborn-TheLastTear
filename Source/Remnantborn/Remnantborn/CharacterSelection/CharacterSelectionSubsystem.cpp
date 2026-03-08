@@ -4,6 +4,7 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/Paths.h"
+#include "Remnantborn/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 
 void UCharacterSelectionSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -34,6 +35,16 @@ void UCharacterSelectionSubsystem::LoadAvailableCharacters()
         if (Character)
         {
             CharacterUnlockStatus.Add(Character->CharacterID, Character->bUnlockedByDefault);
+        }
+    }
+
+    // Re-apply purchases from the current profile so unlocks persist across map/widget reloads.
+    if (UMyOnlineGameInstance* OnlineGI = Cast<UMyOnlineGameInstance>(GetGameInstance()))
+    {
+        if (OnlineGI->IsLoggedIn())
+        {
+            const FUserProfile Profile = OnlineGI->GetCurrentUserProfile();
+            SyncUnlocksFromBackend(Profile.PurchasedItems);
         }
     }
 }

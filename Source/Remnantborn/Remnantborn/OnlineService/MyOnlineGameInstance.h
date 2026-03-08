@@ -345,6 +345,11 @@ protected:
     virtual void OnStart() override;
     
 private:
+    bool HasNamedGameSession() const;
+    void ContinueCreateSessionAfterDestroy();
+    void ContinueJoinSessionAfterDestroy();
+    void ReturnToMainMenuLevel();
+
     // === Multiplayer ===
     void OnCreateSessionComplete(FName SessionName, bool bSuccess);
     void OnFindSessionsComplete(bool bSuccess);
@@ -376,6 +381,10 @@ private:
     // Cached variables
     FString PendingSessionName;
     int32 PendingMaxPlayers;
+    FBlueprintSessionResult PendingJoinSessionResult;
+    bool bPendingCreateSessionAfterDestroy = false;
+    bool bPendingJoinSessionAfterDestroy = false;
+    bool bPendingReturnToMainMenu = false;
     bool bIsHosting = false;
     FString LobbyMapPath;
     
