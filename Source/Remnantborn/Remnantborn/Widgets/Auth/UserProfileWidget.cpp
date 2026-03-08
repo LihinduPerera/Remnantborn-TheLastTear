@@ -91,7 +91,7 @@ void UUserProfileWidget::UpdateProfile(const FString& Username, int32 Level, int
     
     if (LevelText)
     {
-        LevelText->SetText(FText::FromString(FString::Printf(TEXT("Level: %d"), Level)));
+        LevelText->SetText(FText::FromString(FString::Printf(TEXT("Lv: %d"), Level)));
     }
     
     if (RemnantText)

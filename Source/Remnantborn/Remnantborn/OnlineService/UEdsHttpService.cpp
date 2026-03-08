@@ -16,7 +16,7 @@ const FString UEdsHttpService::USER_ID_KEY = TEXT("UserId");
 
 UEdsHttpService::UEdsHttpService()
 {
-    BaseUrl = TEXT("http://localhost:3000/api");
+    BaseUrl = TEXT("https://remnantborn-thelasttear.onrender.com/api");
 }
 
 void UEdsHttpService::Initialize(const FString& InBaseUrl)
