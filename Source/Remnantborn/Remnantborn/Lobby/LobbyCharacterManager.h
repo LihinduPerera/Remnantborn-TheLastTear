@@ -80,7 +80,7 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lobby Character Manager")
     TSubclassOf<class ARemnantbornCharacterBase> DefaultCharacterClass;
 
-    virtual class ARemnantbornCharacterBase* CreateCharacterInstance(UCharacterDataAsset* CharacterData);
+    virtual class ARemnantbornCharacterBase* CreateCharacterInstance(UCharacterDataAsset* CharacterData, const FTransform& SpawnTransform);
     virtual void ConfigureCharacterForLobby(class ARemnantbornCharacterBase* Character);
     virtual void ReleaseSpawnPoint(ALobbyCharacterSpawnPoint* SpawnPoint);
 

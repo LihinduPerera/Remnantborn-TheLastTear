@@ -42,7 +42,9 @@ void ULobbyCharacterManager::SpawnCharacterForPlayer(APlayerController* PlayerCo
         return;
     }
 
-    ARemnantbornCharacterBase* CharacterInstance = CreateCharacterInstance(CharacterData);
+    FTransform SpawnTransform = SpawnPoint->GetSpawnTransform();
+
+    ARemnantbornCharacterBase* CharacterInstance = CreateCharacterInstance(CharacterData, SpawnTransform);
     if (!CharacterInstance)
     {
         UE_LOG(LogTemp, Error, TEXT("LobbyCharacterManager: Failed to create character instance"));
@@ -50,9 +52,6 @@ void ULobbyCharacterManager::SpawnCharacterForPlayer(APlayerController* PlayerCo
         return;
     }
 
-    FTransform SpawnTransform = SpawnPoint->GetSpawnTransform();
-    CharacterInstance->SetActorTransform(SpawnTransform, false, nullptr, ETeleportType::ResetPhysics);
-    
     ConfigureCharacterForLobby(CharacterInstance);
 
     SpawnPoint->SetOccupied(true);
@@ -122,17 +121,13 @@ void ULobbyCharacterManager::UpdateCharacterForPlayer(APlayerController* PlayerC
 
     CleanupCharacter(CharacterInfo->SpawnedCharacter);
 
-    ARemnantbornCharacterBase* NewCharacter = CreateCharacterInstance(NewCharacterData);
+    FTransform SpawnTransform = CharacterInfo->SpawnPoint ? CharacterInfo->SpawnPoint->GetSpawnTransform() : FTransform::Identity;
+
+    ARemnantbornCharacterBase* NewCharacter = CreateCharacterInstance(NewCharacterData, SpawnTransform);
     if (!NewCharacter)
     {
         UE_LOG(LogTemp, Error, TEXT("LobbyCharacterManager: Failed to create new character for update"));
         return;
-    }
-
-    if (CharacterInfo->SpawnPoint)
-    {
-        FTransform SpawnTransform = CharacterInfo->SpawnPoint->GetSpawnTransform();
-        NewCharacter->SetActorTransform(SpawnTransform, false, nullptr, ETeleportType::ResetPhysics);
     }
 
     ConfigureCharacterForLobby(NewCharacter);
@@ -197,7 +192,7 @@ void ULobbyCharacterManager::SetMaxPlayers(int32 NewMaxPlayers)
     UE_LOG(LogTemp, Log, TEXT("LobbyCharacterManager: Set max players to %d"), MaxPlayers);
 }
 
-ARemnantbornCharacterBase* ULobbyCharacterManager::CreateCharacterInstance(UCharacterDataAsset* CharacterData)
+ARemnantbornCharacterBase* ULobbyCharacterManager::CreateCharacterInstance(UCharacterDataAsset* CharacterData, const FTransform& SpawnTransform)
 {
     UWorld* World = GetWorld();
     if (!World)
@@ -216,7 +211,7 @@ ARemnantbornCharacterBase* ULobbyCharacterManager::CreateCharacterInstance(UChar
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
     SpawnParams.bNoFail = true;
 
-    ARemnantbornCharacterBase* Character = World->SpawnActor<ARemnantbornCharacterBase>(CharacterClass, SpawnParams);
+    ARemnantbornCharacterBase* Character = World->SpawnActor<ARemnantbornCharacterBase>(CharacterClass, SpawnTransform, SpawnParams);
     if (!Character)
     {
         UE_LOG(LogTemp, Error, TEXT("LobbyCharacterManager: Failed to spawn character"));
