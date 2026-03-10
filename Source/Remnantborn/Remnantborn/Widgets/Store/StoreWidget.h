@@ -10,6 +10,7 @@ class UWrapBox;
 class UCircularThrobber;
 class UStoreCharacterCardWidget;
 class UStoreSubsystem;
+class UWidget;
 
 UCLASS()
 class REMNANTBORN_API UStoreWidget : public UUserWidget
@@ -26,6 +27,18 @@ public:
 protected:
     UPROPERTY(meta = (BindWidgetOptional))
     UTextBlock* BalanceText;
+
+    // login gating widgets (optional bindings)
+    UPROPERTY(meta = (BindWidgetOptional))
+    UWidget* ContentPanel;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    UTextBlock* LoginRequiredText;
+
+private:
+    // login gating helper
+    void ApplyLoginGating(bool bIsLoggedIn);
+
 
     UPROPERTY(meta = (BindWidgetOptional))
     UWrapBox* CharacterGrid;

@@ -30,14 +30,19 @@ void UStoreWidget::NativeConstruct()
         GameInstance->OnAuthStateChanged.AddDynamic(this, &UStoreWidget::HandleAuthStateChanged);
         GameInstance->OnProfileUpdated.AddDynamic(this, &UStoreWidget::HandleProfileUpdated);
 
+        // initialize login gating and balance
+        ApplyLoginGating(GameInstance->IsLoggedIn());
         if (GameInstance->IsLoggedIn())
         {
             UpdateBalanceText(GameInstance->GetCurrentUserProfile().RemnantCount);
-            // we'll call RefreshStore once below
+            // we'll call RefreshStore once below when logged in
         }
     }
 
-    RefreshStore();
+    if (GetGameInstance<UMyOnlineGameInstance>() && GetGameInstance<UMyOnlineGameInstance>()->IsLoggedIn())
+    {
+        RefreshStore();
+    }
 }
 
 void UStoreWidget::RefreshStore()
@@ -151,11 +156,34 @@ void UStoreWidget::OnCharacterPurchaseRequested(const FString& CharacterId)
 
 
 // --------------------------------------------------
+// login gating helper
+// --------------------------------------------------
+
+void UStoreWidget::ApplyLoginGating(bool bIsLoggedIn)
+{
+    if (ContentPanel)
+    {
+        ContentPanel->SetVisibility(bIsLoggedIn ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    }
+    if (LoginRequiredText)
+    {
+        LoginRequiredText->SetVisibility(bIsLoggedIn ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+        if (!bIsLoggedIn)
+        {
+            LoginRequiredText->SetText(FText::FromString(TEXT("Please log in to access this feature.")));
+        }
+    }
+}
+
+
+// --------------------------------------------------
 // GameInstance event handlers
 // --------------------------------------------------
 
 void UStoreWidget::HandleAuthStateChanged(bool bIsLoggedIn)
 {
+    ApplyLoginGating(bIsLoggedIn);
+
     if (bIsLoggedIn)
     {
         // user just logged in or restored session; refresh everything
@@ -168,13 +196,12 @@ void UStoreWidget::HandleAuthStateChanged(bool bIsLoggedIn)
     }
     else
     {
-        // logged out: clear grid and notify
+        // logged out: clear grid and notify via gating
         if (CharacterGrid)
         {
             CharacterGrid->ClearChildren();
         }
         UpdateBalanceText(0);
-        SetNotification(TEXT("Please log in to view store"), true);
     }
 }
 

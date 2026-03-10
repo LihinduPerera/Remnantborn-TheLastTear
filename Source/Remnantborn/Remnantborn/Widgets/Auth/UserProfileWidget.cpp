@@ -69,6 +69,9 @@ void UUserProfileWidget::NativeConstruct()
 		{
 			HandleProfileUpdated(Existing);
 		}
+
+		// apply gating based on current login state
+		ApplyLoginGating(GameInstance->IsLoggedIn());
 	}
 }
 
@@ -219,6 +222,8 @@ void UUserProfileWidget::HandleProfileUpdated(const FUserProfile& UserProfile)
 
 void UUserProfileWidget::HandleAuthStateChanged(bool bIsLoggedIn)
 {
+	ApplyLoginGating(bIsLoggedIn);
+
 	if (!bIsLoggedIn)
 	{
 		// logged out state – clear fields and owned characters list
@@ -229,6 +234,29 @@ void UUserProfileWidget::HandleAuthStateChanged(bool bIsLoggedIn)
 		}
 	}
 }
+
+
+// -------------------------------------------------
+// login gating helper
+// -------------------------------------------------
+
+void UUserProfileWidget::ApplyLoginGating(bool bIsLoggedIn)
+{
+	if (ContentPanel)
+	{
+		ContentPanel->SetVisibility(bIsLoggedIn ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+	if (LoginRequiredText)
+	{
+		LoginRequiredText->SetVisibility(bIsLoggedIn ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+		if (!bIsLoggedIn)
+		{
+			LoginRequiredText->SetText(FText::FromString(TEXT("Please log in to access this feature.")));
+		}
+	}
+}
+
+
 // -------------------------------------------------
 // Avatar download helpers
 // -------------------------------------------------

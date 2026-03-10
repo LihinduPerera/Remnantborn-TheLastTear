@@ -11,6 +11,7 @@
 
 class UOwnedCharacterCardWidget;
 class UProfileEditWidget; // forward declare profile editor
+class UWidget; // container used for login gating
 
 UCLASS()
 class REMNANTBORN_API UUserProfileWidget : public UUserWidget
@@ -48,7 +49,21 @@ public:
 	// Widget components
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* UsernameText;
-    
+
+protected:
+	// content shown when user is logged in
+	UPROPERTY(meta = (BindWidgetOptional))
+	UWidget* ContentPanel;
+
+	// message shown when login is required
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* LoginRequiredText;
+
+private:
+	// helper used by several widgets to toggle login gate
+	void ApplyLoginGating(bool bIsLoggedIn);
+
+	    
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* LevelText;
     

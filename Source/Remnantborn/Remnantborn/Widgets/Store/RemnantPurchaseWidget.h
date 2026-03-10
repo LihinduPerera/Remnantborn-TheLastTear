@@ -12,6 +12,7 @@ class UHorizontalBox;
 class UCircularThrobber;
 class URemnantPackageCardWidget;
 class UStoreSubsystem;
+class UWidget;
 
 UCLASS()
 class REMNANTBORN_API URemnantPurchaseWidget : public UUserWidget
@@ -28,6 +29,18 @@ public:
 protected:
     UPROPERTY(meta = (BindWidgetOptional))
     UTextBlock* BalanceText;
+
+    // gating widgets
+    UPROPERTY(meta = (BindWidgetOptional))
+    UWidget* ContentPanel;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    UTextBlock* LoginRequiredText;
+
+private:
+    // helper for toggling login gated UI
+    void ApplyLoginGating(bool bIsLoggedIn);
+
 
     UPROPERTY(meta = (BindWidgetOptional))
     UHorizontalBox* PackageContainer;

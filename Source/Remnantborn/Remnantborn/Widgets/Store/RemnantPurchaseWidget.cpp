@@ -35,6 +35,7 @@ void URemnantPurchaseWidget::NativeConstruct()
         GameInstance->OnAuthStateChanged.AddDynamic(this, &URemnantPurchaseWidget::HandleAuthStateChanged);
         GameInstance->OnProfileUpdated.AddDynamic(this, &URemnantPurchaseWidget::HandleProfileUpdated);
 
+        ApplyLoginGating(GameInstance->IsLoggedIn());
         if (GameInstance->IsLoggedIn())
         {
             UpdateBalanceText(GameInstance->GetCurrentUserProfile().RemnantCount);
@@ -42,7 +43,10 @@ void URemnantPurchaseWidget::NativeConstruct()
         }
     }
 
-    RefreshPackages();
+    if (GetGameInstance<UMyOnlineGameInstance>() && GetGameInstance<UMyOnlineGameInstance>()->IsLoggedIn())
+    {
+        RefreshPackages();
+    }
 }
 
 void URemnantPurchaseWidget::RefreshPackages()
@@ -165,6 +169,8 @@ void URemnantPurchaseWidget::OnPayNowClicked()
 
 void URemnantPurchaseWidget::HandleAuthStateChanged(bool bIsLoggedIn)
 {
+    ApplyLoginGating(bIsLoggedIn);
+
     if (bIsLoggedIn)
     {
         SetNotification(TEXT(""), false);
@@ -177,7 +183,6 @@ void URemnantPurchaseWidget::HandleAuthStateChanged(bool bIsLoggedIn)
     else
     {
         UpdateBalanceText(0);
-        SetNotification(TEXT("Please log in to buy Remnants"), true);
         if (PackageContainer)
         {
             PackageContainer->ClearChildren();
@@ -198,6 +203,27 @@ bool URemnantPurchaseWidget::ValidatePaymentInputs() const
     const FString CVV = CardCVVInput ? CardCVVInput->GetText().ToString() : TEXT("");
 
     return CardNumber.Len() >= 16 && Expiry.Len() == 5 && CVV.Len() >= 3;
+}
+
+
+// --------------------------------------------------
+// login gating helper
+// --------------------------------------------------
+
+void URemnantPurchaseWidget::ApplyLoginGating(bool bIsLoggedIn)
+{
+    if (ContentPanel)
+    {
+        ContentPanel->SetVisibility(bIsLoggedIn ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    }
+    if (LoginRequiredText)
+    {
+        LoginRequiredText->SetVisibility(bIsLoggedIn ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+        if (!bIsLoggedIn)
+        {
+            LoginRequiredText->SetText(FText::FromString(TEXT("Please log in to access this feature.")));
+        }
+    }
 }
 
 void URemnantPurchaseWidget::SetLoadingState(bool bLoading)
