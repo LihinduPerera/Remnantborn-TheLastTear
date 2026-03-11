@@ -10,10 +10,13 @@
 #include "Components/VerticalBox.h"
 #include "Components/ComboBoxString.h"
 #include "Components/CheckBox.h"
+#include "Components/Image.h"
 #include "Auth/LoginWidget.h"
 #include "Auth/UserProfileWidget.h"
 #include "Remnantborn/Remnantborn/OnlineService/UEdsHttpService.h"
 #include "SessionInfo/SessionInfoObject.h"
+#include "Interfaces/IHttpRequest.h"
+#include "Interfaces/IHttpResponse.h"
 #include "MainMenuWidget.generated.h"
 
 UCLASS()
@@ -46,8 +49,9 @@ protected:
     UFUNCTION()
     void OnLoginButtonClicked();
     
+    // clicking the avatar opens the profile popup (replaces old ProfileButton)
     UFUNCTION()
-    void OnProfileButtonClicked();
+    void OnAvatarClicked();
     
     // ListView callbacks
     UFUNCTION()
@@ -126,8 +130,12 @@ protected:
     UPROPERTY(meta = (BindWidget))
     UButton* LoginButton;
     
-    UPROPERTY(meta = (BindWidget))
-    UButton* ProfileButton;
+    // replaces ProfileButton; image optionally wrapped in a button for clicks
+    UPROPERTY(meta = (BindWidgetOptional))
+    UImage* ProfileAvatarImage;
+    
+    UPROPERTY(meta = (BindWidgetOptional))
+    UButton* ProfileAvatarButton;
     
     UPROPERTY(meta = (BindWidget))
     UTextBlock* WelcomeText;
@@ -157,6 +165,14 @@ protected:
     
     UPROPERTY(EditAnywhere, Category = "Widgets")
     TSubclassOf<UUserProfileWidget> ProfileWidgetClass;
+
+private:
+    // current profile picture URL for asynchronous loading
+    FString CurrentAvatarUrl;
+
+    // helpers to download and set avatar texture
+    void LoadAvatarFromUrl(const FString& Url);
+    void OnAvatarDownloaded(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bSuccess);
     
 private:
     int32 SelectedSessionIndex;

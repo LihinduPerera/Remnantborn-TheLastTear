@@ -6,12 +6,16 @@
 #include "Components/TextBlock.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/VerticalBox.h"
+#include "Components/Image.h"
 #include "Auth/LoginWidget.h"
 #include "Auth/UserProfileWidget.h"
 #include "SessionInfo/SessionInfoObject.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "TimerManager.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
+#include "HttpModule.h"
+#include "IImageWrapperModule.h"
+#include "IImageWrapper.h"
 
 void UMainMenuWidget::NativeConstruct()
 {
@@ -49,9 +53,16 @@ void UMainMenuWidget::NativeConstruct()
         LoginButton->OnClicked.AddDynamic(this, &UMainMenuWidget::OnLoginButtonClicked);
     }
     
-    if (ProfileButton)
+    // avatar click opens profile, if a button wrapper exists
+    if (ProfileAvatarButton)
     {
-        ProfileButton->OnClicked.AddDynamic(this, &UMainMenuWidget::OnProfileButtonClicked);
+        ProfileAvatarButton->OnClicked.AddDynamic(this, &UMainMenuWidget::OnAvatarClicked);
+    }
+    
+    // hide avatar by default; it will be shown when logged in
+    if (ProfileAvatarImage)
+    {
+        ProfileAvatarImage->SetVisibility(ESlateVisibility::Collapsed);
     }
 
     // Bind ListView events
@@ -280,18 +291,17 @@ void UMainMenuWidget::OnLoginButtonClicked()
     }
 }
 
-void UMainMenuWidget::OnProfileButtonClicked()
+void UMainMenuWidget::OnAvatarClicked()
 {
+    // same behavior as old profile button
     if (ProfileWidgetClass && bIsLoggedIn)
     {
-        // Remove existing profile widget
         if (ProfileWidget && ProfileWidget->IsInViewport())
         {
             ProfileWidget->RemoveFromParent();
             ProfileWidget = nullptr;
         }
         
-        // Create new profile widget
         ProfileWidget = CreateWidget<UUserProfileWidget>(GetWorld(), ProfileWidgetClass);
         if (ProfileWidget)
         {
@@ -394,6 +404,12 @@ void UMainMenuWidget::HandleProfileUpdated(const FUserProfile& UserProfile)
     // always refresh display and update login flag based on validity
     bIsLoggedIn = UserProfile.bIsValid;
     UpdateUserInfo();
+    
+    // if we have an avatar URL, trigger download
+    if (!CurrentUserProfile.AvatarUrl.IsEmpty())
+    {
+        LoadAvatarFromUrl(CurrentUserProfile.AvatarUrl);
+    }
     
     SetStatusText("Profile updated");
 }
@@ -515,6 +531,12 @@ void UMainMenuWidget::UpdateUserInfo()
         {
             UserRemnantText->SetText(FText::FromString(FString::Printf(TEXT("Remnants: %d"), CurrentUserProfile.RemnantCount)));
         }
+        
+        // show avatar if available
+        if (ProfileAvatarImage && !CurrentAvatarUrl.IsEmpty())
+        {
+            ProfileAvatarImage->SetVisibility(ESlateVisibility::Visible);
+        }
     }
     else
     {
@@ -545,8 +567,79 @@ void UMainMenuWidget::UpdateUserInfo()
         {
             UserRemnantText->SetText(FText::FromString(TEXT("Remnants: -")));
         }
+        
+        // hide avatar when logged out
+        if (ProfileAvatarImage)
+        {
+            ProfileAvatarImage->SetVisibility(ESlateVisibility::Collapsed);
+        }
     }
 }
+
+// -------------------------------------------------
+// Avatar download helpers
+// -------------------------------------------------
+
+void UMainMenuWidget::LoadAvatarFromUrl(const FString& Url)
+{
+    if (Url.IsEmpty() || !ProfileAvatarImage)
+    {
+        return;
+    }
+
+    CurrentAvatarUrl = Url;
+
+    FHttpModule* Http = &FHttpModule::Get();
+    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = Http->CreateRequest();
+    Request->SetURL(Url);
+    Request->SetVerb(TEXT("GET"));
+    Request->OnProcessRequestComplete().BindUObject(this, &UMainMenuWidget::OnAvatarDownloaded);
+    Request->ProcessRequest();
+}
+
+void UMainMenuWidget::OnAvatarDownloaded(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bSuccess)
+{
+    if (!bSuccess || !Response.IsValid() || Response->GetResponseCode() != 200)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to download avatar image"));
+        return;
+    }
+
+    TArray<uint8> ImageData = Response->GetContent();
+    if (ImageData.Num() == 0)
+    {
+        return;
+    }
+
+    IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+    EImageFormat Format = EImageFormat::JPEG;
+    if (CurrentAvatarUrl.EndsWith(TEXT(".png")) || CurrentAvatarUrl.EndsWith(TEXT(".PNG")))
+    {
+        Format = EImageFormat::PNG;
+    }
+
+    TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(Format);
+    if (ImageWrapper.IsValid() && ImageWrapper->SetCompressed(ImageData.GetData(), ImageData.Num()))
+    {
+        TArray<uint8> RawData;
+        if (ImageWrapper->GetRaw(ERGBFormat::BGRA, 8, RawData) && RawData.Num() > 0)
+        {
+            int32 Width = ImageWrapper->GetWidth();
+            int32 Height = ImageWrapper->GetHeight();
+            UTexture2D* Texture = UTexture2D::CreateTransient(Width, Height, PF_B8G8R8A8);
+            if (Texture && Texture->GetPlatformData() && Texture->GetPlatformData()->Mips.Num() > 0)
+            {
+                void* TextureData = Texture->GetPlatformData()->Mips[0].BulkData.Lock(LOCK_READ_WRITE);
+                FMemory::Memcpy(TextureData, RawData.GetData(), RawData.Num());
+                Texture->GetPlatformData()->Mips[0].BulkData.Unlock();
+                Texture->UpdateResource();
+                ProfileAvatarImage->SetBrushFromTexture(Texture, true);
+                ProfileAvatarImage->SetVisibility(ESlateVisibility::Visible);
+            }
+        }
+    }
+}
+
 
 void UMainMenuWidget::OnMaxPlayersSelectionChanged(FString SelectedItem, ESelectInfo::Type SelectionType)
 {

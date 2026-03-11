@@ -145,11 +145,12 @@ Place them in your results layout where reward should appear.
 
 ## 3) Main Menu wiring (open Store + Remnant Purchase)
 
-`UMainMenuWidget` already supports Login/Profile popups. Store and Remnant pages can be opened directly in Blueprint.
+`UMainMenuWidget` already supports Login/Profile popups and now displays a profile avatar instead of a standalone Profile button. Store and Remnant pages can be opened directly in Blueprint.
 
 Open `WBP_MainMenu` (parent `MainMenuWidget`):
 
-1. Add two Buttons in Designer:
+1. Delete the old `ProfileButton` from the designer and add an Image named `ProfileAvatarImage`. You may optionally wrap the image in a `Button` named `ProfileAvatarButton` to make it clickable.
+2. Add two Buttons in Designer:
    - `OpenStoreButton`
    - `OpenRemnantPurchaseButton`
 
@@ -162,6 +163,7 @@ Open `WBP_MainMenu` (parent `MainMenuWidget`):
 3. Also ensure existing class defaults are set on `WBP_MainMenu`:
    - `LoginWidgetClass` = your login widget BP
    - `ProfileWidgetClass` = `WBP_UserProfile`
+   - Bind `ProfileAvatarImage` (and `ProfileAvatarButton` if used) in the defaults as well.
 
 ### Optional: Tabbed layout in Main Menu
 

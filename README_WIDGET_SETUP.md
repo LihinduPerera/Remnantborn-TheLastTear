@@ -209,15 +209,20 @@ Border (root, padding=5, background=semi‑transparent)
 - Button: OpenStoreButton
 - Button: OpenRemnantPurchaseButton
 
+*The existing Profile button has been replaced by an avatar image. In the designer remove the old ProfileButton and add the following:*
 ### Graph Logic
 - On `OpenStoreButton.OnClicked`:
   - Create Widget `WBP_Store`, Add to Viewport (Z=100)
 - On `OpenRemnantPurchaseButton.OnClicked`:
   - Create Widget `WBP_RemnantPurchase`, Add to Viewport (Z=100)
 
+- **Avatar click (optional)**: if you wrapped the image in `ProfileAvatarButton`, wire its `OnClicked` event to call the `OnAvatarClicked` function exposed by `MainMenuWidget`.
+
 ### Class Defaults (verify)
 - `LoginWidgetClass` = your login widget BP
 - `ProfileWidgetClass` = `WBP_UserProfile`
+
+- (NEW) `ProfileAvatarImage` must be bound to the avatar image widget in the designer. If you use a button wrapper, also bind `ProfileAvatarButton`.
 
 > **Optional:** Implement tabbed layout with `WidgetSwitcher` and 4 tab buttons for Play/Profile/Store/Remnants.
 
