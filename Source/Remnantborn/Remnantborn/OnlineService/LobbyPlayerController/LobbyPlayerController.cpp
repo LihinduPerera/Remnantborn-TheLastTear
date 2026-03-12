@@ -312,6 +312,23 @@ void ALobbyPlayerController::SetMaxPlayers(int32 MaxPlayers)
     Server_SetMaxPlayers(MaxPlayers);
 }
 
+void ALobbyPlayerController::SetSelectedMap(FName MapID)
+{
+    if (!IsHost() || MapID.IsNone())
+    {
+        return;
+    }
+
+    if (!HasAuthority())
+    {
+        Server_SetSelectedMap(MapID);
+    }
+    else
+    {
+        Server_SetSelectedMap_Implementation(MapID);
+    }
+}
+
 bool ALobbyPlayerController::Server_SetMaxPlayers_Validate(int32 MaxPlayers)
 {
     return MaxPlayers == 2 || MaxPlayers == 4;
@@ -323,6 +340,19 @@ void ALobbyPlayerController::Server_SetMaxPlayers_Implementation(int32 MaxPlayer
     if (LobbyGameMode)
     {
         LobbyGameMode->SetMaxPlayers(MaxPlayers);
+    }
+}
+
+bool ALobbyPlayerController::Server_SetSelectedMap_Validate(FName MapID)
+{
+    return !MapID.IsNone();
+}
+
+void ALobbyPlayerController::Server_SetSelectedMap_Implementation(FName MapID)
+{
+    if (ALobbyGameMode* LobbyGameMode = Cast<ALobbyGameMode>(GetWorld()->GetAuthGameMode()))
+    {
+        LobbyGameMode->SetSelectedMap(MapID);
     }
 }
 

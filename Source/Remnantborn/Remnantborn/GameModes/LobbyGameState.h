@@ -53,6 +53,9 @@ public:
     UPROPERTY(Replicated, BlueprintReadOnly, Category = "Lobby")
     bool bLobbyLocked = false;
 
+    UPROPERTY(ReplicatedUsing = OnRep_SelectedMapID, BlueprintReadOnly, Category = "Lobby")
+    FName SelectedMapID;
+
     // Player info array
     UPROPERTY(Replicated, BlueprintReadOnly, Category = "Lobby")
     TArray<FLobbyPlayerInfo> PlayerInfoArray;
@@ -66,6 +69,7 @@ public:
     void RemovePlayerInfo(APlayerController* PlayerController);
     void SetCountdownState(bool bActive, int32 Time);
     void SetLobbyLocked(bool bLocked);
+    void SetSelectedMap(FName NewMapID);
 
     // Lobby character display tracking
     UFUNCTION(BlueprintCallable, Category = "Lobby Characters")
@@ -92,6 +96,9 @@ protected:
 
     UFUNCTION()
     void OnRep_LobbyLocked();
+
+    UFUNCTION()
+    void OnRep_SelectedMapID();
 
 private:
     // Reference to character manager (set by GameMode)

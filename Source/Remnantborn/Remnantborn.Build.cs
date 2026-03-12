@@ -32,6 +32,7 @@ public class Remnantborn : ModuleRules
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
+			"AssetRegistry",
 			"RHI",
 			"AudioModulation",
 			"GameplayAbilities",

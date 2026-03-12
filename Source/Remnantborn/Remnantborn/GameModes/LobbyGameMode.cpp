@@ -9,6 +9,8 @@
 #include "Remnantborn/Remnantborn/Widgets/CharacterSelection/CharacterSelectionWidget.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterPlayerState.h"
+#include "Remnantborn/Remnantborn/MapSelection/MapDataAsset.h"
+#include "Remnantborn/Remnantborn/MapSelection/MapSelectionSubsystem.h"
 #include "Remnantborn/Remnantborn/OnlineService/LobbyPlayerController/LobbyPlayerController.h"
 #include "Remnantborn/Remnantborn/GameModes/LobbyGameState.h"
 #include "Remnantborn/Remnantborn/Lobby/LobbyCharacterManager.h"
@@ -31,6 +33,14 @@ void ALobbyGameMode::BeginPlay()
     if (CharacterSubsystem)
     {
         CharacterSubsystem->LoadAvailableCharacters();
+    }
+
+    if (UMapSelectionSubsystem* MapSubsystem = GetGameInstance()->GetSubsystem<UMapSelectionSubsystem>())
+    {
+        if (UMapDataAsset* DefaultMap = MapSubsystem->GetDefaultMap())
+        {
+            SetSelectedMap(DefaultMap->MapID);
+        }
     }
 
     // Notify GameInstance that we've entered the lobby - this ensures music continues seamlessly
@@ -153,6 +163,26 @@ void ALobbyGameMode::SetMaxPlayers(int32 NewMaxPlayers)
     if (bCountdownActive && CurrentPlayerCount < MaxPlayers)
     {
         CancelMatchCountdown();
+    }
+}
+
+void ALobbyGameMode::SetSelectedMap(FName MapID)
+{
+    if (MapID.IsNone())
+    {
+        return;
+    }
+
+    UMapSelectionSubsystem* MapSubsystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UMapSelectionSubsystem>() : nullptr;
+    if (!MapSubsystem || !MapSubsystem->GetMapByID(MapID))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("LobbyGameMode: Attempted to select invalid map ID %s"), *MapID.ToString());
+        return;
+    }
+
+    if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
+    {
+        LobbyGS->SetSelectedMap(MapID);
     }
 }
 
@@ -342,13 +372,31 @@ void ALobbyGameMode::StartMatchTravel()
 
 void ALobbyGameMode::ExecuteMatchTravel()
 {
+    const FString DefaultMapPath = TEXT("/Game/Remnantborn/Levels/TestGround");
+
     // Switch to gameplay music when game starts
     if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
     {
         GameInstance->OnMatchStarted();
     }
 
-    FString TravelPath = GameMapPath + "?listen";
+    FString ResolvedMapPath = DefaultMapPath;
+    if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GameState))
+    {
+        if (UMapSelectionSubsystem* MapSubsystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UMapSelectionSubsystem>() : nullptr)
+        {
+            if (UMapDataAsset* SelectedMap = MapSubsystem->GetMapByID(LobbyGS->SelectedMapID))
+            {
+                const FString CandidateMapPath = SelectedMap->GetMapPath();
+                if (!CandidateMapPath.IsEmpty())
+                {
+                    ResolvedMapPath = CandidateMapPath;
+                }
+            }
+        }
+    }
+
+    FString TravelPath = ResolvedMapPath + "?listen";
     UE_LOG(LogTemp, Log, TEXT("Starting match travel to: %s"), *TravelPath);
     GetWorld()->ServerTravel(TravelPath, true);
 }

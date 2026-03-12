@@ -1,11 +1,14 @@
 #include "LobbyWidget.h"
 #include "Remnantborn/Remnantborn/GameModes/LobbyGameState.h"
+#include "Remnantborn/Remnantborn/MapSelection/MapDataAsset.h"
+#include "Remnantborn/Remnantborn/MapSelection/MapSelectionSubsystem.h"
 #include "Remnantborn/Remnantborn/OnlineService/LobbyPlayerController/LobbyPlayerController.h"
 #include "Remnantborn/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 #include "Components/VerticalBox.h"
 #include "Components/HorizontalBox.h"
+#include "MapSelectorEntryWidget.h"
 #include "PlayerListEntryWidget.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterPlayerState.h"
 #include "Kismet/GameplayStatics.h"
@@ -71,6 +74,15 @@ void ULobbyWidget::NativeDestruct()
         }
     }
     PlayerEntries.Empty();
+
+    for (UMapSelectorEntryWidget* Entry : MapEntries)
+    {
+        if (Entry)
+        {
+            Entry->RemoveFromParent();
+        }
+    }
+    MapEntries.Empty();
 
     Super::NativeDestruct();
 }
@@ -180,6 +192,14 @@ void ULobbyWidget::HandleLobbyStateChanged()
     UpdateUI();
 }
 
+void ULobbyWidget::HandleMapEntrySelected(FName MapID)
+{
+    if (ALobbyPlayerController* LobbyPC = GetLobbyPlayerController())
+    {
+        LobbyPC->SetSelectedMap(MapID);
+    }
+}
+
 void ULobbyWidget::HandleCountdownStarted()
 {
     UpdateUI();
@@ -231,6 +251,7 @@ void ULobbyWidget::UpdateUI()
     UpdatePlayerCountText();
     UpdateCountdownText();
     UpdateHostControls();
+    UpdateMapSelection();
     UpdateReadyButton();
 
     int32 ReadyPlayers = 0;
@@ -318,6 +339,71 @@ void ULobbyWidget::UpdateHostControls()
 
     bool bIsHost = LobbyPC->IsHost();
     HostControlsContainer->SetVisibility(bIsHost ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+}
+
+void ULobbyWidget::UpdateMapSelection()
+{
+    ALobbyGameState* LobbyGS = GetLobbyGameState();
+    ALobbyPlayerController* LobbyPC = GetLobbyPlayerController();
+    UMapSelectionSubsystem* MapSubsystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UMapSelectionSubsystem>() : nullptr;
+
+    if (!LobbyGS || !LobbyPC)
+    {
+        return;
+    }
+
+    const bool bIsHost = LobbyPC->IsHost();
+
+    if (MapSelectorContainer)
+    {
+        MapSelectorContainer->SetVisibility(bIsHost ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    }
+
+    UMapDataAsset* SelectedMap = MapSubsystem ? MapSubsystem->GetMapByID(LobbyGS->SelectedMapID) : nullptr;
+    if (SelectedMapNameText)
+    {
+        SelectedMapNameText->SetText(SelectedMap ? SelectedMap->MapName : FText::FromString(TEXT("Map Not Selected")));
+    }
+
+    if (!bIsHost)
+    {
+        RebuildMapList(TArray<UMapDataAsset*>(), LobbyGS->SelectedMapID);
+        return;
+    }
+
+    const TArray<UMapDataAsset*> AvailableMaps = MapSubsystem ? MapSubsystem->GetAvailableMaps() : TArray<UMapDataAsset*>();
+    RebuildMapList(AvailableMaps, LobbyGS->SelectedMapID);
+}
+
+void ULobbyWidget::RebuildMapList(const TArray<UMapDataAsset*>& AvailableMaps, const FName& SelectedMapID)
+{
+    for (UMapSelectorEntryWidget* Entry : MapEntries)
+    {
+        if (Entry)
+        {
+            Entry->RemoveFromParent();
+        }
+    }
+    MapEntries.Empty();
+
+    if (!MapListContainer || !MapEntryWidgetClass)
+    {
+        return;
+    }
+
+    for (UMapDataAsset* MapData : AvailableMaps)
+    {
+        UMapSelectorEntryWidget* Entry = CreateWidget<UMapSelectorEntryWidget>(this, MapEntryWidgetClass);
+        if (!Entry || !MapData)
+        {
+            continue;
+        }
+
+        Entry->SetMapInfo(MapData, MapData->MapID == SelectedMapID);
+        Entry->OnMapSelected.AddDynamic(this, &ULobbyWidget::HandleMapEntrySelected);
+        MapListContainer->AddChildToVerticalBox(Entry);
+        MapEntries.Add(Entry);
+    }
 }
 
 void ULobbyWidget::UpdateReadyButton()

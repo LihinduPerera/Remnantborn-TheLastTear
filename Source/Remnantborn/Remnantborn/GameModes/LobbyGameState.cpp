@@ -10,6 +10,7 @@ ALobbyGameState::ALobbyGameState()
     bCountdownActive = false;
     CountdownTime = 0;
     bLobbyLocked = false;
+    SelectedMapID = NAME_None;
 }
 
 void ALobbyGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -22,6 +23,7 @@ void ALobbyGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
     DOREPLIFETIME(ALobbyGameState, CountdownTime);
     DOREPLIFETIME(ALobbyGameState, PlayerInfoArray);
     DOREPLIFETIME(ALobbyGameState, bLobbyLocked);
+    DOREPLIFETIME(ALobbyGameState, SelectedMapID);
 }
 
 void ALobbyGameState::UpdatePlayerInfo(APlayerController* PlayerController, bool bReady, bool bHasCharacter)
@@ -102,6 +104,17 @@ void ALobbyGameState::SetLobbyLocked(bool bLocked)
     bLobbyLocked = bLocked;
 }
 
+void ALobbyGameState::SetSelectedMap(FName NewMapID)
+{
+    if (SelectedMapID == NewMapID)
+    {
+        return;
+    }
+
+    SelectedMapID = NewMapID;
+    NotifyStateChanged();
+}
+
 void ALobbyGameState::OnRep_MaxPlayers()
 {
     OnLobbyStateChanged.Broadcast();
@@ -128,6 +141,11 @@ void ALobbyGameState::OnRep_PlayerInfoArray()
 }
 
 void ALobbyGameState::OnRep_LobbyLocked()
+{
+    OnLobbyStateChanged.Broadcast();
+}
+
+void ALobbyGameState::OnRep_SelectedMapID()
 {
     OnLobbyStateChanged.Broadcast();
 }

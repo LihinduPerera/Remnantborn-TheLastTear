@@ -8,6 +8,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/GameModeBase.h"
+#include "TimerManager.h"
 #include "Remnantborn/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 
 void UMatchResultsWidget::NativeConstruct()
@@ -37,6 +38,26 @@ void UMatchResultsWidget::NativeConstruct()
     }
 }
 
+void UMatchResultsWidget::NativeDestruct()
+{
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(InitRetryTimerHandle);
+    }
+
+    if (MatchGameState)
+    {
+        MatchGameState->OnMatchStateChanged.RemoveDynamic(this, &UMatchResultsWidget::OnMatchStateChangedDelegate);
+    }
+
+    if (UMyOnlineGameInstance* GameInstance = GetGameInstance<UMyOnlineGameInstance>())
+    {
+        GameInstance->OnMatchRewardReceived.RemoveDynamic(this, &UMatchResultsWidget::DisplayMatchReward);
+    }
+
+    Super::NativeDestruct();
+}
+
 void UMatchResultsWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
     Super::NativeTick(MyGeometry, InDeltaTime);
@@ -55,6 +76,11 @@ void UMatchResultsWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 
 void UMatchResultsWidget::InitializeMatchResults()
 {
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(InitRetryTimerHandle);
+    }
+
     // Get the game state
     MatchGameState = GetWorld() ? GetWorld()->GetGameState<AMultiplayerMatchGameState>() : nullptr;
     
@@ -62,30 +88,43 @@ void UMatchResultsWidget::InitializeMatchResults()
     {
         UE_LOG(LogTemp, Warning, TEXT("MatchResultsWidget: Could not get MultiplayerMatchGameState, will retry..."));
         
-        // Retry initialization after a short delay
-        FTimerHandle RetryTimer;
-        GetWorld()->GetTimerManager().SetTimer(RetryTimer, [this]()
+        // Retry initialization after a short delay using weak capture to avoid dereferencing a destroyed widget.
+        TWeakObjectPtr<UMatchResultsWidget> WeakThis(this);
+        if (UWorld* World = GetWorld())
         {
-            if (!MatchGameState)
+            World->GetTimerManager().SetTimer(InitRetryTimerHandle, [WeakThis]()
             {
-                MatchGameState = GetWorld() ? GetWorld()->GetGameState<AMultiplayerMatchGameState>() : nullptr;
-                if (MatchGameState)
+                UMatchResultsWidget* Widget = WeakThis.Get();
+                if (!Widget)
                 {
-                    UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Successfully got GameState on retry"));
-                    MatchGameState->OnMatchStateChanged.AddDynamic(this, &UMatchResultsWidget::OnMatchStateChangedDelegate);
-                    OnMatchStateChanged(MatchGameState->CurrentMatchState);
+                    return;
                 }
-                else
+
+                if (!Widget->MatchGameState)
                 {
-                    UE_LOG(LogTemp, Error, TEXT("MatchResultsWidget: Still couldn't get GameState after retry!"));
+                    UWorld* WidgetWorld = Widget->GetWorld();
+                    Widget->MatchGameState = WidgetWorld ? WidgetWorld->GetGameState<AMultiplayerMatchGameState>() : nullptr;
+
+                    if (Widget->MatchGameState)
+                    {
+                        UE_LOG(LogTemp, Log, TEXT("MatchResultsWidget: Successfully got GameState on retry"));
+                        Widget->MatchGameState->OnMatchStateChanged.RemoveDynamic(Widget, &UMatchResultsWidget::OnMatchStateChangedDelegate);
+                        Widget->MatchGameState->OnMatchStateChanged.AddDynamic(Widget, &UMatchResultsWidget::OnMatchStateChangedDelegate);
+                        Widget->OnMatchStateChanged(Widget->MatchGameState->CurrentMatchState);
+                    }
+                    else
+                    {
+                        UE_LOG(LogTemp, Error, TEXT("MatchResultsWidget: Still couldn't get GameState after retry!"));
+                    }
                 }
-            }
-        }, 1.0f, false);
+            }, 1.0f, false);
+        }
         
         return;
     }
 
     // Bind to match state changes
+    MatchGameState->OnMatchStateChanged.RemoveDynamic(this, &UMatchResultsWidget::OnMatchStateChangedDelegate);
     MatchGameState->OnMatchStateChanged.AddDynamic(this, &UMatchResultsWidget::OnMatchStateChangedDelegate);
 
     // Update initial state

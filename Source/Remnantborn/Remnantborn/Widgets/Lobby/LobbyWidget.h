@@ -5,6 +5,7 @@
 #include "LobbyWidget.generated.h"
 
 class ALobbyGameState;
+class UMapDataAsset;
 
 UCLASS()
 class REMNANTBORN_API ULobbyWidget : public UUserWidget
@@ -49,6 +50,9 @@ protected:
     void HandleLobbyStateChanged();
 
     UFUNCTION()
+    void HandleMapEntrySelected(FName MapID);
+
+    UFUNCTION()
     void HandleCountdownStarted();
 
     UFUNCTION()
@@ -88,7 +92,14 @@ protected:
     UPROPERTY(meta = (BindWidget))
     class UButton* Set4PlayersButton;
 
-    
+    UPROPERTY(meta = (BindWidget))
+    class UHorizontalBox* MapSelectorContainer;
+
+    UPROPERTY(meta = (BindWidget))
+    class UTextBlock* SelectedMapNameText;
+
+    UPROPERTY(meta = (BindWidget))
+    class UVerticalBox* MapListContainer;
 
     UPROPERTY(meta = (BindWidget))
     class UHorizontalBox* HostControlsContainer;
@@ -96,6 +107,9 @@ protected:
     // Widget class for player list entries
     UPROPERTY(EditAnywhere, Category = "Widgets")
     TSubclassOf<class UPlayerListEntryWidget> PlayerListEntryClass;
+
+    UPROPERTY(EditAnywhere, Category = "Widgets")
+    TSubclassOf<class UMapSelectorEntryWidget> MapEntryWidgetClass;
 
 public:
     void UpdateUI();
@@ -106,7 +120,10 @@ private:
     void UpdatePlayerCountText();
     void UpdateCountdownText();
     void UpdateHostControls();
+    void UpdateMapSelection();
     void UpdateReadyButton();
+    void RebuildMapList(const TArray<UMapDataAsset*>& AvailableMaps, const FName& SelectedMapID);
 
     TArray<class UPlayerListEntryWidget*> PlayerEntries;
+    TArray<class UMapSelectorEntryWidget*> MapEntries;
 };

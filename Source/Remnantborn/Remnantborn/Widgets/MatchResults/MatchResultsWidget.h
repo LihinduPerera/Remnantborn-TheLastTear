@@ -18,6 +18,7 @@ class REMNANTBORN_API UMatchResultsWidget : public UUserWidget
 
 public:
     virtual void NativeConstruct() override;
+    virtual void NativeDestruct() override;
     virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
     // Initialize the widget with match results
@@ -109,4 +110,7 @@ private:
     // Auto-show timer
     float TimeSinceMatchEnd = 0.0f;
     bool bShouldAutoShow = false;
+
+    // Retry handle for delayed GameState lookup.
+    FTimerHandle InitRetryTimerHandle;
 };

@@ -30,6 +30,9 @@ public:
     void SetMaxPlayers(int32 NewMaxPlayers);
 
     UFUNCTION(BlueprintCallable, Category = "Lobby")
+    void SetSelectedMap(FName MapID);
+
+    UFUNCTION(BlueprintCallable, Category = "Lobby")
     void StartMatchCountdown();
 
     UFUNCTION(BlueprintCallable, Category = "Lobby")
@@ -86,9 +89,6 @@ private:
 
     UPROPERTY(EditDefaultsOnly, Category = "Lobby")
     int32 CountdownDuration = 5;
-
-    UPROPERTY(EditDefaultsOnly, Category = "Lobby")
-    FString GameMapPath = "/Game/Remnantborn/Levels/TestGround";
 
     int32 CurrentPlayerCount = 0;
     int32 CountdownTime = 0;

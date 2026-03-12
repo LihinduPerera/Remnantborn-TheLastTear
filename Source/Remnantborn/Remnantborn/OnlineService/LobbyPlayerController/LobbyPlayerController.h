@@ -25,6 +25,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Lobby")
     void SetMaxPlayers(int32 MaxPlayers);
 
+    UFUNCTION(BlueprintCallable, Category = "Lobby")
+    void SetSelectedMap(FName MapID);
+
     UFUNCTION(BlueprintPure, Category = "Lobby")
     bool IsHost() const;
 
@@ -103,6 +106,9 @@ private:
 
     UFUNCTION(Server, Reliable, WithValidation)
     void Server_SetMaxPlayers(int32 MaxPlayers);
+
+    UFUNCTION(Server, Reliable, WithValidation)
+    void Server_SetSelectedMap(FName MapID);
 
     UFUNCTION(Server, Reliable, WithValidation)
     void Server_ConfirmCharacterSelection(FName CharacterID);
