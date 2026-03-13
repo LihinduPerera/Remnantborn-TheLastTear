@@ -26,12 +26,8 @@ AMultiplayerGameMode::AMultiplayerGameMode()
     // Set game state class for match tracking
     GameStateClass = AMultiplayerMatchGameState::StaticClass();
     
-	// Default pawn class - will be overridden by character selection
-	static ConstructorHelpers::FClassFinder<APawn> PlayerPawnBPClass(TEXT("/Game/Remnantborn/Blueprints/GameplayAbilitySystem/Characters/BP_RemnantbornCharacterBase"));
-	if (PlayerPawnBPClass.Class != NULL)
-	{
-		DefaultPawnClass = PlayerPawnBPClass.Class;
-	}
+    // Default pawn fallback; actual character is chosen at runtime via selection
+    DefaultPawnClass = ARemnantbornCharacterBase::StaticClass();
 }
 
 void AMultiplayerGameMode::BeginPlay()

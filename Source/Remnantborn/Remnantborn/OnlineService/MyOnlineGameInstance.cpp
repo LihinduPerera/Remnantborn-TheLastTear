@@ -8,8 +8,11 @@
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundCue.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
+
+#if WITH_EDITOR
 #include "DesktopPlatformModule.h"
 #include "IDesktopPlatform.h"
+#endif
 
 UMyOnlineGameInstance::UMyOnlineGameInstance()
 {
@@ -1109,12 +1112,13 @@ void UMyOnlineGameInstance::UploadAvatar(const FString& FilePath)
 
 bool UMyOnlineGameInstance::PickImageFile(FString& OutFilePath)
 {
-    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
-    if (!DesktopPlatform)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("DesktopPlatform not available"));
-        return false;
-    }
+#if WITH_EDITOR
+	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+	if (!DesktopPlatform)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("DesktopPlatform not available"));
+		return false;
+	}
 
     void* ParentWindowHandle = nullptr;
     TArray<FString> OutFiles;
@@ -1127,12 +1131,16 @@ bool UMyOnlineGameInstance::PickImageFile(FString& OutFilePath)
         EFileDialogFlags::None,
         OutFiles);
     
-    if (bResult && OutFiles.Num() > 0)
-    {
-        OutFilePath = OutFiles[0];
-        return true;
-    }
-    return false;
+	if (bResult && OutFiles.Num() > 0)
+	{
+		OutFilePath = OutFiles[0];
+		return true;
+	}
+	return false;
+#else
+	UE_LOG(LogTemp, Warning, TEXT("PickImageFile is only available in editor builds."));
+	return false;
+#endif
 }
 
 void UMyOnlineGameInstance::UpdateGameStats(int32 Level, int32 RemnantCount, const FString& Operation)

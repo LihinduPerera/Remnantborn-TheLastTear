@@ -43,9 +43,13 @@ public class Remnantborn : ModuleRules
 			"JsonUtilities",
 			"WebSockets",
 			"OnlineSubsystem",
-			"ImageWrapper",
-			"DesktopPlatform"
+			"ImageWrapper"
 		});
+
+		if (Target.bBuildEditor)
+		{
+			PrivateDependencyModuleNames.Add("DesktopPlatform");
+		}
 		
 		if (Target.Configuration == UnrealTargetConfiguration.Shipping)
 		{
