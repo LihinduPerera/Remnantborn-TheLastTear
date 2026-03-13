@@ -34,6 +34,8 @@ void AMultiplayerGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
+	PlayerStartAssignments.Reset();
+
 	// Initialize match tracking after a short delay to ensure all players are loaded
 	FTimerHandle InitTimer;
 	FTimerDelegate InitDelegate;
@@ -108,6 +110,8 @@ void AMultiplayerGameMode::PostLogin(APlayerController* NewPlayer)
 
 void AMultiplayerGameMode::Logout(AController* Exiting)
 {
+	PlayerStartAssignments.Remove(TWeakObjectPtr<AController>(Exiting));
+
 	Super::Logout(Exiting);
 
 	if (APlayerController* PC = Cast<APlayerController>(Exiting))
@@ -135,6 +139,105 @@ void AMultiplayerGameMode::SetupPlayerInput(APlayerController* PlayerController)
 	}
 }
 
+AActor* AMultiplayerGameMode::GetUniquePlayerStart(AController* Player)
+{
+    if (!Player)
+    {
+        return nullptr;
+    }
+
+    const TWeakObjectPtr<AController> PlayerKey(Player);
+
+    if (const TWeakObjectPtr<AActor>* ExistingStart = PlayerStartAssignments.Find(PlayerKey))
+    {
+        if (ExistingStart->IsValid())
+        {
+            return ExistingStart->Get();
+        }
+
+        PlayerStartAssignments.Remove(PlayerKey);
+    }
+
+    TSet<TWeakObjectPtr<AActor>> UsedStartSpots;
+    for (auto It = PlayerStartAssignments.CreateIterator(); It; ++It)
+    {
+        if (!It.Key().IsValid() || !It.Value().IsValid())
+        {
+            It.RemoveCurrent();
+            continue;
+        }
+
+        UsedStartSpots.Add(It.Value());
+    }
+
+    TArray<AActor*> AllStartSpots;
+    UGameplayStatics::GetAllActorsOfClass(this, APlayerStart::StaticClass(), AllStartSpots);
+
+    AActor* FirstValidStart = nullptr;
+
+    for (AActor* CandidateStart : AllStartSpots)
+    {
+        if (!CandidateStart)
+        {
+            continue;
+        }
+
+        if (!FirstValidStart)
+        {
+            FirstValidStart = CandidateStart;
+        }
+
+        if (UsedStartSpots.Contains(TWeakObjectPtr<AActor>(CandidateStart)))
+        {
+            continue;
+        }
+
+        PlayerStartAssignments.Add(PlayerKey, CandidateStart);
+        return CandidateStart;
+    }
+
+    if (FirstValidStart)
+    {
+        PlayerStartAssignments.Add(PlayerKey, FirstValidStart);
+        UE_LOG(LogTemp, Warning, TEXT("GetUniquePlayerStart: All start spots are occupied; reusing %s"), *FirstValidStart->GetName());
+        return FirstValidStart;
+    }
+
+    return nullptr;
+}
+
+void AMultiplayerGameMode::RestartPlayerUsingAssignedStart(APlayerController* PlayerController)
+{
+    if (!PlayerController)
+    {
+        return;
+    }
+
+    if (AActor* StartSpot = GetUniquePlayerStart(PlayerController))
+    {
+        RestartPlayerAtPlayerStart(PlayerController, StartSpot);
+        return;
+    }
+
+    RestartPlayer(PlayerController);
+}
+
+AActor* AMultiplayerGameMode::ChoosePlayerStart_Implementation(AController* Player)
+{
+    if (AActor* UniqueStart = GetUniquePlayerStart(Player))
+    {
+        return UniqueStart;
+    }
+
+    AActor* PreferredStart = Super::ChoosePlayerStart_Implementation(Player);
+    if (!PreferredStart)
+    {
+        UE_LOG(LogTemp, Error, TEXT("ChoosePlayerStart: No valid player start found"));
+    }
+
+    return PreferredStart;
+}
+
 void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerController)
 {
     if (!PlayerController || !GetWorld())
@@ -155,7 +258,7 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
     {
         UE_LOG(LogTemp, Warning, TEXT("PlayerState not found for player, using default character"));
         // Use default spawning for safety
-        RestartPlayer(PlayerController);
+        RestartPlayerUsingAssignedStart(PlayerController);
         return;
     }
 
@@ -172,7 +275,7 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
         // Spawn default character using standard GameMode method
         if (DefaultPawnClass)
         {
-            RestartPlayer(PlayerController);
+            RestartPlayerUsingAssignedStart(PlayerController);
         }
         return;
     }
@@ -194,7 +297,7 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
             // Fallback to default spawning
             if (DefaultPawnClass)
             {
-                RestartPlayer(PlayerController);
+                RestartPlayerUsingAssignedStart(PlayerController);
             }
             return;
         }
@@ -207,7 +310,7 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
         // Fallback to default spawning
         if (DefaultPawnClass)
         {
-            RestartPlayer(PlayerController);
+            RestartPlayerUsingAssignedStart(PlayerController);
         }
         return;
     }
@@ -215,8 +318,13 @@ void AMultiplayerGameMode::SpawnPlayerWithCharacter(APlayerController* PlayerCon
     UE_LOG(LogTemp, Log, TEXT("Spawning character class %s for player %s"), 
         *SelectedCharacter->CharacterClass->GetName(), *PlayerState->GetPlayerName());
 
-    // Find a player start for this player
-    AActor* StartSpot = FindPlayerStart(PlayerController);
+    // Find a unique player start for this player
+    AActor* StartSpot = GetUniquePlayerStart(PlayerController);
+    if (!StartSpot)
+    {
+        StartSpot = ChoosePlayerStart(PlayerController);
+    }
+
     if (!StartSpot)
     {
         UE_LOG(LogTemp, Error, TEXT("No player start found for player %s"), *PlayerState->GetPlayerName());
@@ -325,7 +433,7 @@ void AMultiplayerGameMode::RetrySpawnPlayerWithCharacter(APlayerController* Play
             UE_LOG(LogTemp, Error, TEXT("RetrySpawn: Failed to apply default character, spawning with default pawn class"));
             if (DefaultPawnClass)
             {
-                RestartPlayer(PlayerController);
+                RestartPlayerUsingAssignedStart(PlayerController);
             }
         }
         return;

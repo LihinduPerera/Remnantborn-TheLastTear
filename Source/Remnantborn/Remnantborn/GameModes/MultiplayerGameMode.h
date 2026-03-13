@@ -22,6 +22,7 @@ protected:
     virtual void Logout(AController* Exiting) override;
     virtual void PostSeamlessTravel() override;
     virtual void Tick(float DeltaTime) override;
+    virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 
     /**
      * Initialize match tracking when all players are ready
@@ -43,6 +44,10 @@ public:
 
 private:
     bool bRewardsDispatched = false;
+    TMap<TWeakObjectPtr<AController>, TWeakObjectPtr<AActor>> PlayerStartAssignments;
+
+    AActor* GetUniquePlayerStart(AController* Player);
+    void RestartPlayerUsingAssignedStart(APlayerController* PlayerController);
 
 	void SetupPlayerInput(APlayerController* PlayerController);
     
