@@ -115,6 +115,8 @@ CrashReportClient/
 /Content/CastleAssets/Textures
 /Content/Fab
 Content/Remnantborn/Levels/Level-1_BuiltData.uasset
+/Content/Remnantborn/Levels/Blackfen.umap
+/Content/Remnantborn/Levels/MedievalVillageDay.umap
 /Content/OldLevelPrototyping
 /Content/MetaHumans
 /Content/Remnantborn/Characters
@@ -124,3 +126,4 @@ Content/Remnantborn/Levels/Level-1_BuiltData.uasset
 /Content/Remnantborn/Animations
 /Content/Remnantborn/VFX
 /Content/Remnantborn/Sounds/Music
+/Content/MedievalVillage
