@@ -9,9 +9,25 @@
 #include "Remnantborn/Remnantborn/Store/StoreSubsystem.h"
 #include "Remnantborn/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 
+namespace
+{
+constexpr TCHAR DefaultCardNumber[] = TEXT("1111 1111 1111 1111");
+constexpr TCHAR DefaultCardExpiry[] = TEXT("11/11");
+constexpr TCHAR DefaultCardCVV[] = TEXT("111");
+}
+
 void URemnantPurchaseWidget::NativeConstruct()
 {
     Super::NativeConstruct();
+
+    InitializeStaticPaymentInputs();
+
+    SelectedPackageId.Empty();
+    if (SelectedPackageText)
+    {
+        SelectedPackageText->SetText(FText::GetEmpty());
+        SelectedPackageText->SetVisibility(ESlateVisibility::Collapsed);
+    }
 
     if (PayNowButton)
     {
@@ -131,7 +147,31 @@ void URemnantPurchaseWidget::OnPackageSelected(const FString& PackageId)
 
     if (SelectedPackageText)
     {
-        SelectedPackageText->SetText(FText::FromString(FString::Printf(TEXT("Selected Package: %s"), *PackageId)));
+        if (PackageId.IsEmpty())
+        {
+            SelectedPackageText->SetText(FText::GetEmpty());
+            SelectedPackageText->SetVisibility(ESlateVisibility::Collapsed);
+            return;
+        }
+
+        FString SelectedPackageName = PackageId;
+
+        if (StoreSubsystem)
+        {
+            const TArray<FRemnantPackage>& Packages = StoreSubsystem->GetCachedPackages();
+            const FRemnantPackage* SelectedPackage = Packages.FindByPredicate([&PackageId](const FRemnantPackage& Package)
+            {
+                return Package.PackageId == PackageId;
+            });
+
+            if (SelectedPackage && !SelectedPackage->Name.IsEmpty())
+            {
+                SelectedPackageName = SelectedPackage->Name;
+            }
+        }
+
+        SelectedPackageText->SetText(FText::FromString(FString::Printf(TEXT("Selected Package: %s"), *SelectedPackageName)));
+        SelectedPackageText->SetVisibility(ESlateVisibility::Visible);
     }
 }
 
@@ -154,12 +194,13 @@ void URemnantPurchaseWidget::OnPayNowClicked()
         return;
     }
 
+    FString CardNumber;
+    FString CardExpiry;
+    FString CardCVV;
+    GetPaymentInputs(CardNumber, CardExpiry, CardCVV);
+
     SetLoadingState(true);
-    StoreSubsystem->PurchaseRemnants(
-        SelectedPackageId,
-        CardNumberInput ? CardNumberInput->GetText().ToString() : TEXT(""),
-        CardExpiryInput ? CardExpiryInput->GetText().ToString() : TEXT(""),
-        CardCVVInput ? CardCVVInput->GetText().ToString() : TEXT(""));
+    StoreSubsystem->PurchaseRemnants(SelectedPackageId, CardNumber, CardExpiry, CardCVV);
 }
 
 
@@ -182,6 +223,13 @@ void URemnantPurchaseWidget::HandleAuthStateChanged(bool bIsLoggedIn)
     }
     else
     {
+        SelectedPackageId.Empty();
+        if (SelectedPackageText)
+        {
+            SelectedPackageText->SetText(FText::GetEmpty());
+            SelectedPackageText->SetVisibility(ESlateVisibility::Collapsed);
+        }
+
         UpdateBalanceText(0);
         if (PackageContainer)
         {
@@ -198,11 +246,95 @@ void URemnantPurchaseWidget::HandleProfileUpdated(const FUserProfile& UserProfil
 
 bool URemnantPurchaseWidget::ValidatePaymentInputs() const
 {
-    const FString CardNumber = CardNumberInput ? CardNumberInput->GetText().ToString().Replace(TEXT(" "), TEXT("")) : TEXT("");
-    const FString Expiry = CardExpiryInput ? CardExpiryInput->GetText().ToString() : TEXT("");
-    const FString CVV = CardCVVInput ? CardCVVInput->GetText().ToString() : TEXT("");
+    FString CardNumber;
+    FString Expiry;
+    FString CVV;
+    GetPaymentInputs(CardNumber, Expiry, CVV);
 
-    return CardNumber.Len() >= 16 && Expiry.Len() == 5 && CVV.Len() >= 3;
+    const FString SanitizedCard = CardNumber.Replace(TEXT(" "), TEXT("")).Replace(TEXT("-"), TEXT(""));
+    if (SanitizedCard.Len() != 16)
+    {
+        return false;
+    }
+
+    for (TCHAR Character : SanitizedCard)
+    {
+        if (!FChar::IsDigit(Character))
+        {
+            return false;
+        }
+    }
+
+    if (Expiry.Len() != 5 || Expiry[2] != TEXT('/'))
+    {
+        return false;
+    }
+
+    if (!FChar::IsDigit(Expiry[0]) || !FChar::IsDigit(Expiry[1]) || !FChar::IsDigit(Expiry[3]) || !FChar::IsDigit(Expiry[4]))
+    {
+        return false;
+    }
+
+    const int32 Month = FCString::Atoi(*Expiry.Left(2));
+    if (Month < 1 || Month > 12)
+    {
+        return false;
+    }
+
+    if (CVV.Len() < 3 || CVV.Len() > 4)
+    {
+        return false;
+    }
+
+    for (TCHAR Character : CVV)
+    {
+        if (!FChar::IsDigit(Character))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void URemnantPurchaseWidget::InitializeStaticPaymentInputs()
+{
+    if (CardNumberInput && CardNumberInput->GetText().IsEmpty())
+    {
+        CardNumberInput->SetText(FText::FromString(DefaultCardNumber));
+    }
+
+    if (CardExpiryInput && CardExpiryInput->GetText().IsEmpty())
+    {
+        CardExpiryInput->SetText(FText::FromString(DefaultCardExpiry));
+    }
+
+    if (CardCVVInput && CardCVVInput->GetText().IsEmpty())
+    {
+        CardCVVInput->SetText(FText::FromString(DefaultCardCVV));
+    }
+}
+
+void URemnantPurchaseWidget::GetPaymentInputs(FString& OutCardNumber, FString& OutExpiry, FString& OutCVV) const
+{
+    OutCardNumber = CardNumberInput ? CardNumberInput->GetText().ToString().TrimStartAndEnd() : FString();
+    OutExpiry = CardExpiryInput ? CardExpiryInput->GetText().ToString().TrimStartAndEnd() : FString();
+    OutCVV = CardCVVInput ? CardCVVInput->GetText().ToString().TrimStartAndEnd() : FString();
+
+    if (OutCardNumber.IsEmpty())
+    {
+        OutCardNumber = DefaultCardNumber;
+    }
+
+    if (OutExpiry.IsEmpty())
+    {
+        OutExpiry = DefaultCardExpiry;
+    }
+
+    if (OutCVV.IsEmpty())
+    {
+        OutCVV = DefaultCardCVV;
+    }
 }
 
 

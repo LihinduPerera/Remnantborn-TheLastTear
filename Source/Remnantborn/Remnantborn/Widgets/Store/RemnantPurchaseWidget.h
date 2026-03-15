@@ -70,6 +70,9 @@ private:
     TSubclassOf<URemnantPackageCardWidget> RemnantPackageCardClass;
 
 private:
+    void InitializeStaticPaymentInputs();
+    void GetPaymentInputs(FString& OutCardNumber, FString& OutExpiry, FString& OutCVV) const;
+
     UPROPERTY()
     UStoreSubsystem* StoreSubsystem;
 
