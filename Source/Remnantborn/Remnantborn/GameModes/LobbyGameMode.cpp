@@ -308,17 +308,18 @@ void ALobbyGameMode::StartMatchTravel()
                 ACharacterPlayerState* PlayerState = Pair.Key->GetPlayerState<ACharacterPlayerState>();
                 if (PlayerState)
                 {
-                    FString PlayerName = PlayerState->GetPlayerName();
-                    FName CharacterID = Pair.Value->CharacterID;
+                    const FString PlayerName = PlayerState->GetPlayerName();
+                    const FName CharacterID = Pair.Value->CharacterID;
+                    const FString PlayerKey = GameInstance->BuildPlayerCharacterSelectionKeyFromController(Pair.Key);
 
-                    // Store in GameInstance using player name (persists through seamless travel)
-                    GameInstance->StorePlayerCharacterSelection(PlayerName, CharacterID);
+                    // Store using a stable key (UniqueNetId when available) to avoid collisions.
+                    GameInstance->StorePlayerCharacterSelectionForPlayerController(Pair.Key, CharacterID);
 
                     // Also set in PlayerState for immediate replication
                     PlayerState->SetSelectedCharacter(Pair.Value);
 
-                    UE_LOG(LogTemp, Log, TEXT("LobbyGameMode: Stored character %s for player %s"),
-                        *CharacterID.ToString(), *PlayerName);
+                    UE_LOG(LogTemp, Log, TEXT("LobbyGameMode: Stored character %s for player %s (key: %s)"),
+                        *CharacterID.ToString(), *PlayerName, *PlayerKey);
                 }
             }
         }

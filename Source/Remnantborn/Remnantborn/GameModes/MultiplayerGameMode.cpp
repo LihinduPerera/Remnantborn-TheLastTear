@@ -464,14 +464,17 @@ void AMultiplayerGameMode::RetrySpawnPlayerWithCharacter(APlayerController* Play
     {
         UE_LOG(LogTemp, Warning, TEXT("RetrySpawn: Character selection not available yet (retry %d/15)"), RetryCount + 1);
         
-        // Try to restore from GameInstance as backup (for listen server host)
-        if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
+        // Try to restore local profile selection only for the host's local controller.
+        if (PlayerController->IsLocalController())
         {
-            FName LocalCharacterSelection = GameInstance->GetLocalCharacterSelection();
-            if (!LocalCharacterSelection.IsNone())
+            if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
             {
-                UE_LOG(LogTemp, Log, TEXT("RetrySpawn: Restoring character selection from GameInstance: %s"), *LocalCharacterSelection.ToString());
-                PlayerState->Server_SetSelectedCharacterID(LocalCharacterSelection);
+                FName LocalCharacterSelection = GameInstance->GetLocalCharacterSelection();
+                if (!LocalCharacterSelection.IsNone())
+                {
+                    UE_LOG(LogTemp, Log, TEXT("RetrySpawn: Restoring local character selection for host controller: %s"), *LocalCharacterSelection.ToString());
+                    PlayerState->Server_SetSelectedCharacterID(LocalCharacterSelection);
+                }
             }
         }
         
@@ -542,12 +545,13 @@ bool AMultiplayerGameMode::ApplyCharacterSelectionFromGameSession(APlayerControl
         return false;
     }
 
-    // Use player name instead of PlayerId because PlayerId can change during seamless travel
-    FString PlayerName = PlayerState->GetPlayerName();
+    const FString PlayerName = PlayerState->GetPlayerName();
+    const FString PlayerControllerKey = GameInstance->BuildPlayerCharacterSelectionKeyFromController(PlayerController);
+    const FString PlayerStateKey = GameInstance->BuildPlayerCharacterSelectionKey(PlayerState);
 
     // Debug: Log the GameInstance and all stored selections
-    UE_LOG(LogTemp, Log, TEXT("ApplyCharacterSelectionFromGameSession: Looking for player '%s' in GameInstance %p"),
-        *PlayerName, (void*)GameInstance);
+    UE_LOG(LogTemp, Log, TEXT("ApplyCharacterSelectionFromGameSession: Looking for player '%s' (controller key: '%s', state key: '%s') in GameInstance %p"),
+        *PlayerName, *PlayerControllerKey, *PlayerStateKey, (void*)GameInstance);
 
     TMap<FString, FName> AllSelections = GameInstance->GetAllCharacterSelections();
     UE_LOG(LogTemp, Log, TEXT("ApplyCharacterSelectionFromGameSession: GameInstance has %d stored selections:"), AllSelections.Num());
@@ -556,11 +560,11 @@ bool AMultiplayerGameMode::ApplyCharacterSelectionFromGameSession(APlayerControl
         UE_LOG(LogTemp, Log, TEXT("  - Player: '%s' -> Character: '%s'"), *Pair.Key, *Pair.Value.ToString());
     }
 
-    FName CharacterID = GameInstance->GetPlayerCharacterSelection(PlayerName);
+    FName CharacterID = GameInstance->GetPlayerCharacterSelectionForPlayerController(PlayerController);
 
     if (CharacterID.IsNone())
     {
-        UE_LOG(LogTemp, Warning, TEXT("ApplyCharacterSelectionFromGameSession: No character selection stored for player '%s'"), *PlayerName);
+        UE_LOG(LogTemp, Warning, TEXT("ApplyCharacterSelectionFromGameSession: No character selection stored for player '%s' (controller key: '%s', state key: '%s')"), *PlayerName, *PlayerControllerKey, *PlayerStateKey);
         return false;
     }
 

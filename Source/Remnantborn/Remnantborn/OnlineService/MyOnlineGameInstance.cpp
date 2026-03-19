@@ -4,6 +4,7 @@
 #include "OnlineSessionSettings.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 #include "Engine/LocalPlayer.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundCue.h"
@@ -1255,6 +1256,115 @@ void UMyOnlineGameInstance::ClearLocalCharacterSelection()
 {
     LocalCharacterSelection = NAME_None;
     UE_LOG(LogTemp, Log, TEXT("Local character selection cleared"));
+}
+
+FString UMyOnlineGameInstance::BuildPlayerCharacterSelectionKey(const APlayerState* PlayerState) const
+{
+    if (!PlayerState)
+    {
+        return FString();
+    }
+
+    const FUniqueNetIdRepl& UniqueId = PlayerState->GetUniqueId();
+    const TSharedPtr<const FUniqueNetId>& UniqueNetId = UniqueId.GetUniqueNetId();
+    if (UniqueNetId.IsValid())
+    {
+        return FString::Printf(TEXT("UID:%s"), *UniqueNetId->ToString());
+    }
+
+    const int32 PlayerId = PlayerState->GetPlayerId();
+    if (PlayerId != INDEX_NONE)
+    {
+        return FString::Printf(TEXT("PID:%d"), PlayerId);
+    }
+
+    const FString PlayerName = PlayerState->GetPlayerName().TrimStartAndEnd();
+    if (!PlayerName.IsEmpty())
+    {
+        return FString::Printf(TEXT("NAME:%s"), *PlayerName);
+    }
+
+    return FString();
+}
+
+void UMyOnlineGameInstance::StorePlayerCharacterSelectionForPlayerState(const APlayerState* PlayerState, const FName& CharacterID)
+{
+    if (!PlayerState || CharacterID.IsNone())
+    {
+        return;
+    }
+
+    const FString PlayerKey = BuildPlayerCharacterSelectionKey(PlayerState);
+    if (!PlayerKey.IsEmpty())
+    {
+        StorePlayerCharacterSelection(PlayerKey, CharacterID);
+    }
+}
+
+FName UMyOnlineGameInstance::GetPlayerCharacterSelectionForPlayerState(const APlayerState* PlayerState) const
+{
+    if (!PlayerState)
+    {
+        return NAME_None;
+    }
+
+    const FString PlayerKey = BuildPlayerCharacterSelectionKey(PlayerState);
+    if (!PlayerKey.IsEmpty())
+    {
+        if (const FName* FoundSelection = PlayerCharacterSelections.Find(PlayerKey))
+        {
+            return *FoundSelection;
+        }
+    }
+
+    return NAME_None;
+}
+
+void UMyOnlineGameInstance::StorePlayerCharacterSelectionForPlayerController(const APlayerController* PlayerController, const FName& CharacterID)
+{
+    if (!PlayerController || CharacterID.IsNone())
+    {
+        return;
+    }
+
+    const FString ControllerKey = BuildPlayerCharacterSelectionKeyFromController(PlayerController);
+    if (!ControllerKey.IsEmpty())
+    {
+        StorePlayerCharacterSelection(ControllerKey, CharacterID);
+    }
+
+    const APlayerState* PlayerState = PlayerController->GetPlayerState<APlayerState>();
+    StorePlayerCharacterSelectionForPlayerState(PlayerState, CharacterID);
+}
+
+FName UMyOnlineGameInstance::GetPlayerCharacterSelectionForPlayerController(const APlayerController* PlayerController) const
+{
+    if (!PlayerController)
+    {
+        return NAME_None;
+    }
+
+    const FString ControllerKey = BuildPlayerCharacterSelectionKeyFromController(PlayerController);
+    if (!ControllerKey.IsEmpty())
+    {
+        if (const FName* FoundByControllerKey = PlayerCharacterSelections.Find(ControllerKey))
+        {
+            return *FoundByControllerKey;
+        }
+    }
+
+    const APlayerState* PlayerState = PlayerController->GetPlayerState<APlayerState>();
+    return GetPlayerCharacterSelectionForPlayerState(PlayerState);
+}
+
+FString UMyOnlineGameInstance::BuildPlayerCharacterSelectionKeyFromController(const APlayerController* PlayerController) const
+{
+    if (!PlayerController)
+    {
+        return FString();
+    }
+
+    return FString::Printf(TEXT("PC:%s"), *PlayerController->GetName());
 }
 
 void UMyOnlineGameInstance::StorePlayerCharacterSelection(const FString& PlayerName, const FName& CharacterID)

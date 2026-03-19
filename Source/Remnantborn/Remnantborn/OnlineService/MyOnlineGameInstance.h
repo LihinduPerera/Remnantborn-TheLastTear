@@ -125,6 +125,14 @@ public:
     
     UFUNCTION(BlueprintPure, Category = "Character Selection")
     TMap<FString, FName> GetAllCharacterSelections() const { return PlayerCharacterSelections; }
+
+    void StorePlayerCharacterSelectionForPlayerState(const class APlayerState* PlayerState, const FName& CharacterID);
+    FName GetPlayerCharacterSelectionForPlayerState(const class APlayerState* PlayerState) const;
+    FString BuildPlayerCharacterSelectionKey(const class APlayerState* PlayerState) const;
+
+    void StorePlayerCharacterSelectionForPlayerController(const class APlayerController* PlayerController, const FName& CharacterID);
+    FName GetPlayerCharacterSelectionForPlayerController(const class APlayerController* PlayerController) const;
+    FString BuildPlayerCharacterSelectionKeyFromController(const class APlayerController* PlayerController) const;
     
     UFUNCTION(BlueprintCallable, Category = "Multiplayer")
     void TravelToGameLevel(FString GameMapPath = "/Game/Remnantborn/Levels/TestGround");
