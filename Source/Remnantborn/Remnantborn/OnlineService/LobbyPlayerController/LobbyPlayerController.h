@@ -94,9 +94,13 @@ protected:
 private:
     void SetupInputMode();
     void CheckAndShowCharacterSelection();
+    void TrySyncPlayerDisplayName();
 
     UFUNCTION(Server, Reliable, WithValidation)
     void Server_SetPlayerReady(bool bReady);
+
+    UFUNCTION(Server, Reliable, WithValidation)
+    void Server_SetPlayerDisplayName(const FString& DisplayName);
 
     UFUNCTION(Server, Reliable, WithValidation)
     void Server_StartMatchCountdown();
@@ -115,4 +119,7 @@ private:
 
     void Client_ShowCharacterSelection_Implementation();
     void Client_CleanupLobbyWidgets_Implementation();
+
+    FTimerHandle DisplayNameSyncTimerHandle;
+    int32 DisplayNameSyncAttempts = 0;
 };

@@ -8,6 +8,7 @@
 #include "Remnantborn/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/GameStateBase.h"
+#include "GameFramework/PlayerState.h"
 #include "Net/UnrealNetwork.h"
 
 void ALobbyPlayerController::BeginPlay()
@@ -34,6 +35,13 @@ void ALobbyPlayerController::BeginPlay()
         {
             GameInstance->OnEnteredLobby();
             UE_LOG(LogTemp, Log, TEXT("LobbyPlayerController: Started lobby music for local player"));
+        }
+
+        if (GetWorld())
+        {
+            DisplayNameSyncAttempts = 0;
+            GetWorld()->GetTimerManager().SetTimer(DisplayNameSyncTimerHandle, this, &ALobbyPlayerController::TrySyncPlayerDisplayName, 0.5f, true);
+            TrySyncPlayerDisplayName();
         }
     }
 }
@@ -96,6 +104,11 @@ void ALobbyPlayerController::HideCharacterSelection()
 
 void ALobbyPlayerController::Client_CleanupLobbyWidgets_Implementation()
 {
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().ClearTimer(DisplayNameSyncTimerHandle);
+    }
+
     if (CharacterSelectionWidget)
     {
         CharacterSelectionWidget->RemoveFromParent();
@@ -156,6 +169,47 @@ void ALobbyPlayerController::CheckAndShowCharacterSelection()
     }
 }
 
+void ALobbyPlayerController::TrySyncPlayerDisplayName()
+{
+    if (!IsLocalPlayerController())
+    {
+        return;
+    }
+
+    ++DisplayNameSyncAttempts;
+
+    UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+    if (!GameInstance)
+    {
+        return;
+    }
+
+    const FString DisplayName = GameInstance->GetCurrentUserProfile().Username.TrimStartAndEnd();
+    if (!DisplayName.IsEmpty())
+    {
+        if (!HasAuthority())
+        {
+            Server_SetPlayerDisplayName(DisplayName);
+        }
+        else
+        {
+            Server_SetPlayerDisplayName_Implementation(DisplayName);
+        }
+
+        if (GetWorld())
+        {
+            GetWorld()->GetTimerManager().ClearTimer(DisplayNameSyncTimerHandle);
+        }
+
+        return;
+    }
+
+    if (DisplayNameSyncAttempts >= 30 && GetWorld())
+    {
+        GetWorld()->GetTimerManager().ClearTimer(DisplayNameSyncTimerHandle);
+    }
+}
+
 bool ALobbyPlayerController::IsHost() const
 {
     if (GetWorld())
@@ -184,6 +238,32 @@ void ALobbyPlayerController::SetPlayerReady(bool bReady)
 bool ALobbyPlayerController::Server_SetPlayerReady_Validate(bool bReady)
 {
     return true;
+}
+
+bool ALobbyPlayerController::Server_SetPlayerDisplayName_Validate(const FString& DisplayName)
+{
+    return !DisplayName.TrimStartAndEnd().IsEmpty() && DisplayName.Len() <= 64;
+}
+
+void ALobbyPlayerController::Server_SetPlayerDisplayName_Implementation(const FString& DisplayName)
+{
+    const FString SanitizedName = DisplayName.TrimStartAndEnd().Left(64);
+    if (SanitizedName.IsEmpty())
+    {
+        return;
+    }
+
+    if (PlayerState && PlayerState->GetPlayerName() != SanitizedName)
+    {
+        PlayerState->SetPlayerName(SanitizedName);
+        PlayerState->ForceNetUpdate();
+    }
+
+    if (ALobbyGameState* LobbyGS = Cast<ALobbyGameState>(GetWorld()->GetGameState()))
+    {
+        LobbyGS->UpdatePlayerInfo(this, bIsReady, bHasSelectedCharacter);
+        LobbyGS->NotifyStateChanged();
+    }
 }
 
 void ALobbyPlayerController::Server_SetPlayerReady_Implementation(bool bReady)

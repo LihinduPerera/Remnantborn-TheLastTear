@@ -57,7 +57,7 @@ public:
     FName SelectedMapID;
 
     // Player info array
-    UPROPERTY(Replicated, BlueprintReadOnly, Category = "Lobby")
+    UPROPERTY(ReplicatedUsing = OnRep_PlayerInfoArray, BlueprintReadOnly, Category = "Lobby")
     TArray<FLobbyPlayerInfo> PlayerInfoArray;
 
     // Events

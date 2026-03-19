@@ -47,6 +47,7 @@ void ALobbyGameState::UpdatePlayerInfo(APlayerController* PlayerController, bool
     {
         if (PlayerInfoArray[i].PlayerId == PlayerId)
         {
+            PlayerInfoArray[i].PlayerName = PlayerName;
             PlayerInfoArray[i].bIsReady = bReady;
             PlayerInfoArray[i].bHasSelectedCharacter = bHasCharacter;
             bFound = true;
