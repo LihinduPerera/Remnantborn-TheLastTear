@@ -6,6 +6,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/GameInstance.h"
 #include "Blueprint/UserWidget.h"
+#include "TimerManager.h"
 
 void AMultiplayerPlayerController::BeginPlay()
 {
@@ -15,6 +16,13 @@ void AMultiplayerPlayerController::BeginPlay()
 	if (IsLocalPlayerController())
 	{
 		InitializeHUD();
+
+		if (GetWorld())
+		{
+			DisplayNameSyncAttempts = 0;
+			GetWorld()->GetTimerManager().SetTimer(DisplayNameSyncTimerHandle, this, &AMultiplayerPlayerController::TrySyncPlayerDisplayName, 0.5f, true);
+			TrySyncPlayerDisplayName();
+		}
 
 		// Trigger gameplay music on local client's GameInstance
 		// This ensures each player hears music locally when they enter gameplay
@@ -44,6 +52,110 @@ void AMultiplayerPlayerController::OnRep_PlayerState()
 		// Send character selection to server if needed
 		// This handles the case where PlayerState is cleared during seamless travel
 		SendCharacterSelectionToServer();
+
+		if (GetWorld() && !GetWorld()->GetTimerManager().IsTimerActive(DisplayNameSyncTimerHandle))
+		{
+			DisplayNameSyncAttempts = 0;
+			GetWorld()->GetTimerManager().SetTimer(DisplayNameSyncTimerHandle, this, &AMultiplayerPlayerController::TrySyncPlayerDisplayName, 0.5f, true);
+		}
+		TrySyncPlayerDisplayName();
+	}
+}
+
+void AMultiplayerPlayerController::TrySyncPlayerDisplayName()
+{
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	++DisplayNameSyncAttempts;
+
+	UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+	if (!GameInstance)
+	{
+		return;
+	}
+
+	const FString DisplayName = GameInstance->GetCurrentUserProfile().Username.TrimStartAndEnd();
+	if (!DisplayName.IsEmpty())
+	{
+		if (!HasAuthority())
+		{
+			Server_SetPlayerDisplayName(DisplayName);
+		}
+		else
+		{
+			Server_SetPlayerDisplayName_Implementation(DisplayName);
+		}
+
+		if (GetWorld())
+		{
+			GetWorld()->GetTimerManager().ClearTimer(DisplayNameSyncTimerHandle);
+		}
+
+		return;
+	}
+
+	if (DisplayNameSyncAttempts >= 30 && GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(DisplayNameSyncTimerHandle);
+	}
+}
+
+bool AMultiplayerPlayerController::Server_SetPlayerDisplayName_Validate(const FString& DisplayName)
+{
+	return !DisplayName.TrimStartAndEnd().IsEmpty() && DisplayName.Len() <= 64;
+}
+
+void AMultiplayerPlayerController::Server_SetPlayerDisplayName_Implementation(const FString& DisplayName)
+{
+	const FString SanitizedName = DisplayName.TrimStartAndEnd().Left(64);
+	if (SanitizedName.IsEmpty())
+	{
+		return;
+	}
+
+	APlayerState* LocalPlayerState = GetPlayerState<APlayerState>();
+	if (!LocalPlayerState)
+	{
+		return;
+	}
+
+	const FString PreviousName = LocalPlayerState->GetPlayerName();
+	if (PreviousName != SanitizedName)
+	{
+		LocalPlayerState->SetPlayerName(SanitizedName);
+		LocalPlayerState->ForceNetUpdate();
+	}
+
+	if (AMultiplayerMatchGameState* MatchGameState = GetWorld() ? GetWorld()->GetGameState<AMultiplayerMatchGameState>() : nullptr)
+	{
+		const int32 LocalPlayerId = LocalPlayerState->GetPlayerId();
+		bool bUpdatedResults = false;
+
+		for (FPlayerMatchResult& Result : MatchGameState->PlayerResults)
+		{
+			if (Result.PlayerId == LocalPlayerId || Result.PlayerName == PreviousName)
+			{
+				if (Result.PlayerName != SanitizedName)
+				{
+					Result.PlayerName = SanitizedName;
+					bUpdatedResults = true;
+				}
+			}
+		}
+
+		if (MatchGameState->WinnerName == PreviousName && MatchGameState->WinnerName != SanitizedName)
+		{
+			MatchGameState->WinnerName = SanitizedName;
+			bUpdatedResults = true;
+		}
+
+		if (bUpdatedResults)
+		{
+			MatchGameState->ForceNetUpdate();
+		}
 	}
 }
 

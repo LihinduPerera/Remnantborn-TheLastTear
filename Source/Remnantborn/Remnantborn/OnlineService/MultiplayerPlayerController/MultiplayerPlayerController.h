@@ -59,12 +59,16 @@ private:
 	void SetupInputMode();
 	void InitializeHUD();
 	void SetupGASForPawn(APawn* InPawn);
+	void TrySyncPlayerDisplayName();
 
 	/**
 	 * Sends character selection to server if we have one stored in GameInstance.
 	 * Called from OnRep_PlayerState when PlayerState first replicates.
 	 */
 	void SendCharacterSelectionToServer();
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_SetPlayerDisplayName(const FString& DisplayName);
 
 	// Match results widget
 	UPROPERTY()
@@ -73,4 +77,7 @@ private:
 	// Match results widget class
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UMatchResultsWidget> MatchResultsWidgetClass;
+
+	FTimerHandle DisplayNameSyncTimerHandle;
+	int32 DisplayNameSyncAttempts = 0;
 };

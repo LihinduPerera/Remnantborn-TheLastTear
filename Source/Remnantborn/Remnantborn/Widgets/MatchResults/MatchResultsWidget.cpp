@@ -288,20 +288,21 @@ bool UMatchResultsWidget::IsLocalPlayerWinner() const
     }
 
     // Get the local player controller
-    if (APlayerController* LocalPC = GetOwningPlayer())
-    {
-        if (APlayerState* LocalPlayerState = LocalPC->GetPlayerState<APlayerState>())
-        {
-            const FString LocalPlayerName = LocalPlayerState->GetPlayerName();
-            
-            // Check if this player's result shows them as winner
-            for (const FPlayerMatchResult& Result : MatchGameState->PlayerResults)
-            {
-                if (Result.PlayerName == LocalPlayerName)
-                {
-                    return Result.bIsWinner;
-                }
-            }
+	if (APlayerController* LocalPC = GetOwningPlayer())
+	{
+		if (APlayerState* LocalPlayerState = LocalPC->GetPlayerState<APlayerState>())
+		{
+			const FString LocalPlayerName = LocalPlayerState->GetPlayerName();
+			const int32 LocalPlayerId = LocalPlayerState->GetPlayerId();
+			
+			// Check if this player's result shows them as winner
+			for (const FPlayerMatchResult& Result : MatchGameState->PlayerResults)
+			{
+				if (Result.PlayerId == LocalPlayerId || Result.PlayerName == LocalPlayerName)
+				{
+					return Result.bIsWinner;
+				}
+			}
         }
     }
 
@@ -316,13 +317,13 @@ void UMatchResultsWidget::CreatePlayerResultEntry(const FPlayerMatchResult& Play
     {
         // Check if this entry is for the local player
         bool bIsLocalPlayer = false;
-        if (APlayerController* LocalPC = GetOwningPlayer())
-        {
-            if (APlayerState* LocalPlayerState = LocalPC->GetPlayerState<APlayerState>())
-            {
-                bIsLocalPlayer = (PlayerResult.PlayerName == LocalPlayerState->GetPlayerName());
-            }
-        }
+		if (APlayerController* LocalPC = GetOwningPlayer())
+		{
+			if (APlayerState* LocalPlayerState = LocalPC->GetPlayerState<APlayerState>())
+			{
+				bIsLocalPlayer = (PlayerResult.PlayerId == LocalPlayerState->GetPlayerId() || PlayerResult.PlayerName == LocalPlayerState->GetPlayerName());
+			}
+		}
 
         FString EntryText;
         if (PlayerResult.bIsWinner)
