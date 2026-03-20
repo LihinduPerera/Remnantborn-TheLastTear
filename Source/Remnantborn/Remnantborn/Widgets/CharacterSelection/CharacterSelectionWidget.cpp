@@ -11,6 +11,8 @@ void UCharacterSelectionWidget::NativeConstruct()
 {
     Super::NativeConstruct();
 
+    CurrentSelection = nullptr;
+
     // Bind button events
     if (ConfirmButton)
     {
@@ -19,8 +21,11 @@ void UCharacterSelectionWidget::NativeConstruct()
 
     if (CancelButton)
     {
-        CancelButton->OnClicked.AddDynamic(this, &UCharacterSelectionWidget::OnCancelClicked);
+        CancelButton->SetVisibility(ESlateVisibility::Collapsed);
+        CancelButton->SetIsEnabled(false);
     }
+
+    UpdateSelectionDisplay(nullptr);
 
     // Initialize character selection - but don't auto-select first character
     // Let the user explicitly select a character
@@ -49,6 +54,9 @@ void UCharacterSelectionWidget::NativeDestruct()
 
 void UCharacterSelectionWidget::InitializeCharacterSelection()
 {
+    CurrentSelection = nullptr;
+    UpdateSelectionDisplay(nullptr);
+
     if (!CharacterListContainer || !CharacterEntryClass)
     {
         return;
@@ -93,11 +101,7 @@ void UCharacterSelectionWidget::InitializeCharacterSelection()
         }
     }
 
-    // Update confirm button state
-    if (ConfirmButton)
-    {
-        ConfirmButton->SetIsEnabled(CurrentSelection != nullptr);
-    }
+    UpdateSelectionDisplay(CurrentSelection);
 }
 
 void UCharacterSelectionWidget::ConfirmSelection()
@@ -134,12 +138,6 @@ void UCharacterSelectionWidget::OnCharacterEntrySelected(UCharacterDataAsset* Ch
     // Update current selection
     CurrentSelection = CharacterData;
     UpdateSelectionDisplay(CharacterData);
-
-    // Enable confirm button
-    if (ConfirmButton)
-    {
-        ConfirmButton->SetIsEnabled(true);
-    }
 }
 
 void UCharacterSelectionWidget::OnConfirmClicked()
@@ -160,11 +158,27 @@ void UCharacterSelectionWidget::UpdateSelectionDisplay(UCharacterDataAsset* Char
 {
     if (!CharacterData)
     {
+        if (SelectedCharacterImage)
+        {
+            SelectedCharacterImage->SetBrushFromTexture(nullptr);
+        }
+
+        if (SelectedCharacterName)
+        {
+            SelectedCharacterName->SetText(FText::GetEmpty());
+        }
+
+        if (SelectedCharacterDescription)
+        {
+            SelectedCharacterDescription->SetText(FText::GetEmpty());
+        }
+
+        UpdateSelectionVisibility(false);
         return;
     }
 
     // Update image
-    if (SelectedCharacterImage && CharacterData->CharacterPortrait)
+    if (SelectedCharacterImage)
     {
         SelectedCharacterImage->SetBrushFromTexture(CharacterData->CharacterPortrait);
     }
@@ -178,5 +192,31 @@ void UCharacterSelectionWidget::UpdateSelectionDisplay(UCharacterDataAsset* Char
     if (SelectedCharacterDescription)
     {
         SelectedCharacterDescription->SetText(CharacterData->CharacterDescription);
+    }
+
+    UpdateSelectionVisibility(true);
+}
+
+void UCharacterSelectionWidget::UpdateSelectionVisibility(bool bHasSelection)
+{
+    if (SelectedCharacterImage)
+    {
+        SelectedCharacterImage->SetVisibility(bHasSelection ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    }
+
+    if (SelectedCharacterName)
+    {
+        SelectedCharacterName->SetVisibility(bHasSelection ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    }
+
+    if (SelectedCharacterDescription)
+    {
+        SelectedCharacterDescription->SetVisibility(bHasSelection ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    }
+
+    if (ConfirmButton)
+    {
+        ConfirmButton->SetVisibility(bHasSelection ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+        ConfirmButton->SetIsEnabled(bHasSelection);
     }
 }

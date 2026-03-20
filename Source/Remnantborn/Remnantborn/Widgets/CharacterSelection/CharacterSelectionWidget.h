@@ -57,7 +57,7 @@ protected:
     UPROPERTY(meta = (BindWidget))
     UButton* ConfirmButton;
 
-    UPROPERTY(meta = (BindWidget))
+    UPROPERTY(meta = (BindWidgetOptional))
     UButton* CancelButton;
 
     // Widget class for character entries
@@ -77,7 +77,7 @@ protected:
 private:
     // Currently selected character
     UPROPERTY()
-    UCharacterDataAsset* CurrentSelection;
+    UCharacterDataAsset* CurrentSelection = nullptr;
 
     // All character entry widgets
     TArray<UCharacterEntryWidget*> CharacterEntries;
@@ -87,4 +87,7 @@ private:
 
     // Update selection display
     void UpdateSelectionDisplay(UCharacterDataAsset* CharacterData);
+
+    // Update visibility/enabled state based on selection
+    void UpdateSelectionVisibility(bool bHasSelection);
 };
