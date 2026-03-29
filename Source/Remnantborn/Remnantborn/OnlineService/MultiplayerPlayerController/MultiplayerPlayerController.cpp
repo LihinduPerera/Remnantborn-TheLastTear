@@ -19,6 +19,8 @@ void AMultiplayerPlayerController::BeginPlay()
 
 		if (GetWorld())
 		{
+			bDisplayNameSynced = false;
+			bBackendUserIdSynced = false;
 			DisplayNameSyncAttempts = 0;
 			GetWorld()->GetTimerManager().SetTimer(DisplayNameSyncTimerHandle, this, &AMultiplayerPlayerController::TrySyncPlayerDisplayName, 0.5f, true);
 			TrySyncPlayerDisplayName();
@@ -42,6 +44,8 @@ void AMultiplayerPlayerController::OnRep_PlayerState()
 	if (IsLocalPlayerController())
 	{
 		InitializeHUD();
+		bDisplayNameSynced = false;
+		bBackendUserIdSynced = false;
 		
 		// Setup GAS for the current pawn if we have one
 		if (GetPawn())
@@ -77,23 +81,45 @@ void AMultiplayerPlayerController::TrySyncPlayerDisplayName()
 		return;
 	}
 
-	const FString DisplayName = GameInstance->GetCurrentUserProfile().Username.TrimStartAndEnd();
-	if (!DisplayName.IsEmpty())
+	if (!bDisplayNameSynced)
 	{
-		if (!HasAuthority())
+		const FString DisplayName = GameInstance->GetCurrentUserProfile().Username.TrimStartAndEnd();
+		if (!DisplayName.IsEmpty())
 		{
-			Server_SetPlayerDisplayName(DisplayName);
-		}
-		else
-		{
-			Server_SetPlayerDisplayName_Implementation(DisplayName);
-		}
+			if (!HasAuthority())
+			{
+				Server_SetPlayerDisplayName(DisplayName);
+			}
+			else
+			{
+				Server_SetPlayerDisplayName_Implementation(DisplayName);
+			}
 
-		if (GetWorld())
-		{
-			GetWorld()->GetTimerManager().ClearTimer(DisplayNameSyncTimerHandle);
+			bDisplayNameSynced = true;
 		}
+    }
 
+	if (!bBackendUserIdSynced)
+	{
+		const FString BackendUserId = GameInstance->GetCurrentUserProfile().UserId.TrimStartAndEnd();
+		if (!BackendUserId.IsEmpty())
+		{
+			if (!HasAuthority())
+			{
+				Server_SetBackendUserId(BackendUserId);
+			}
+			else
+			{
+				Server_SetBackendUserId_Implementation(BackendUserId);
+			}
+
+			bBackendUserIdSynced = true;
+		}
+	}
+
+	if ((bDisplayNameSynced && bBackendUserIdSynced) && GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(DisplayNameSyncTimerHandle);
 		return;
 	}
 
@@ -156,6 +182,32 @@ void AMultiplayerPlayerController::Server_SetPlayerDisplayName_Implementation(co
 		{
 			MatchGameState->ForceNetUpdate();
 		}
+	}
+}
+
+bool AMultiplayerPlayerController::Server_SetBackendUserId_Validate(const FString& BackendUserId)
+{
+	const FString SanitizedId = BackendUserId.TrimStartAndEnd();
+	return !SanitizedId.IsEmpty() && SanitizedId.Len() <= 64;
+}
+
+void AMultiplayerPlayerController::Server_SetBackendUserId_Implementation(const FString& BackendUserId)
+{
+	ACharacterPlayerState* CharPlayerState = GetPlayerState<ACharacterPlayerState>();
+	if (!CharPlayerState)
+	{
+		return;
+	}
+
+	const FString SanitizedId = BackendUserId.TrimStartAndEnd().Left(64);
+	if (SanitizedId.IsEmpty())
+	{
+		return;
+	}
+
+	if (CharPlayerState->GetBackendUserId() != SanitizedId)
+	{
+		CharPlayerState->Server_SetBackendUserId(SanitizedId);
 	}
 }
 

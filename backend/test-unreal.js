@@ -121,8 +121,40 @@ async function testUnrealEndpoints() {
         console.log(`✅ Purchase completed successfully`);
         console.log(`   Item: ${purchaseRes.data.data.item_type}/${purchaseRes.data.data.item_id}`);
 
-        // 10. Test check ownership endpoint
-        console.log('\n10. Testing check ownership endpoint...');
+        // 10. Test match complete endpoint
+        console.log('\n10. Testing match complete endpoint...');
+        const matchId = `test-match-${Date.now()}`;
+        const matchCompleteRes = await axios.post(`${API_BASE}/match/complete`, {
+            matchId,
+            mapName: 'TestGround',
+            gameMode: 'MultiplayerGameMode',
+            durationSeconds: 180,
+            participants: [
+                {
+                    userId,
+                    playerName: testCredentials.username,
+                    playerId: 1,
+                    characterId: 'Warrior_01',
+                    placement: 1,
+                    eliminationOrder: 0,
+                    survivalTimeSeconds: 180,
+                    isWinner: true,
+                    isAliveAtEnd: true,
+                    killCount: 2,
+                    deathCount: 0,
+                    damageDealt: 420,
+                    damageTaken: 120
+                }
+            ]
+        }, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log(`✅ Match complete submitted`);
+        console.log(`   Match ID: ${matchCompleteRes.data.data.match_id}`);
+        console.log(`   Participants saved: ${matchCompleteRes.data.data.participants_saved}`);
+
+        // 11. Test check ownership endpoint
+        console.log('\n11. Testing check ownership endpoint...');
         const ownershipRes = await axios.post(`${API_BASE}/purchases/check-ownership/${userId}`, {
             item_ids: ['dragon_skin_001', 'phoenix_skin_001']
         }, {
@@ -132,8 +164,8 @@ async function testUnrealEndpoints() {
         console.log(`   Owns dragon_skin_001: ${ownershipRes.data.data.ownership.dragon_skin_001}`);
         console.log(`   Owns phoenix_skin_001: ${ownershipRes.data.data.ownership.phoenix_skin_001}`);
 
-        // 11. Test dev-login endpoint (for development only)
-        console.log('\n11. Testing dev-login endpoint...');
+        // 12. Test dev-login endpoint (for development only)
+        console.log('\n12. Testing dev-login endpoint...');
         try {
             const devLoginRes = await axios.post(`${API_BASE}/auth/dev-login`, {
                 email: testCredentials.email

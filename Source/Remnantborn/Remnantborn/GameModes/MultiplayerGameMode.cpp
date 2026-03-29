@@ -710,31 +710,74 @@ void AMultiplayerGameMode::NotifyPlayerDied(APlayerController* PlayerController)
         {
             AMultiplayerMatchGameState* LocalMatchGameState = GetGameState<AMultiplayerMatchGameState>();
             const float MatchDuration = LocalMatchGameState ? LocalMatchGameState->GetMatchDuration() : 0.0f;
+            const int32 MatchDurationSeconds = FMath::Max(0, FMath::RoundToInt(MatchDuration));
+            const FDateTime MatchEndUtc = FDateTime::UtcNow();
+            const FDateTime MatchStartUtc = MatchEndUtc - FTimespan::FromSeconds(MatchDurationSeconds);
             const FString MatchId = FString::Printf(TEXT("%s-%lld"),
                 *UGameplayStatics::GetCurrentLevelName(this),
-                FDateTime::UtcNow().ToUnixTimestamp());
+                MatchEndUtc.ToUnixTimestamp());
+
+            FMatchCompleteRequest MatchRequest;
+            MatchRequest.MatchId = MatchId;
+            MatchRequest.MapName = UGameplayStatics::GetCurrentLevelName(this);
+            MatchRequest.GameMode = GetClass() ? GetClass()->GetName() : TEXT("MultiplayerGameMode");
+            MatchRequest.StartedAt = MatchStartUtc.ToIso8601();
+            MatchRequest.EndedAt = MatchEndUtc.ToIso8601();
+            MatchRequest.DurationSeconds = MatchDurationSeconds;
 
             // Show match results to all players
             for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
             {
                 if (AMultiplayerPlayerController* PC = Cast<AMultiplayerPlayerController>(It->Get()))
                 {
-                    bool bIsWinner = false;
-                    int32 EliminationOrder = 0;
-
                     if (LocalMatchGameState)
                     {
                         if (ACharacterPlayerState* CharacterPlayerState = PC->GetPlayerState<ACharacterPlayerState>())
                         {
                             const FPlayerMatchResult Result = LocalMatchGameState->GetPlayerResult(CharacterPlayerState->GetPlayerName());
-                            bIsWinner = Result.bIsWinner;
-                            EliminationOrder = Result.EliminationOrder;
+
+                            FMatchParticipantPayload ParticipantPayload;
+                            ParticipantPayload.UserId = CharacterPlayerState->GetBackendUserId();
+                            ParticipantPayload.PlayerName = CharacterPlayerState->GetPlayerName();
+                            ParticipantPayload.PlayerId = CharacterPlayerState->GetPlayerId();
+                            ParticipantPayload.CharacterId = CharacterPlayerState->GetSelectedCharacterID().ToString();
+                            ParticipantPayload.Placement = Result.bIsWinner ? 1 : (Result.EliminationOrder > 0 ? Result.EliminationOrder + 1 : 0);
+                            ParticipantPayload.EliminationOrder = Result.EliminationOrder;
+                            ParticipantPayload.SurvivalTimeSeconds = Result.SurvivalTime;
+                            ParticipantPayload.bIsWinner = Result.bIsWinner;
+                            ParticipantPayload.bIsAliveAtEnd = Result.bIsAlive;
+
+                            MatchRequest.Participants.Add(ParticipantPayload);
+
+                            if (ParticipantPayload.UserId.IsEmpty())
+                            {
+                                UE_LOG(LogTemp, Warning, TEXT("MultiplayerGameMode: Missing backend user id for %s. Falling back to per-client reward submission."),
+                                    *ParticipantPayload.PlayerName);
+                                PC->Client_SubmitMatchReward(Result.bIsWinner, MatchDuration, Result.EliminationOrder, MatchId);
+                            }
                         }
                     }
 
-                    PC->Client_SubmitMatchReward(bIsWinner, MatchDuration, EliminationOrder, MatchId);
                     PC->Client_ShowMatchResults();
                 }
+            }
+
+            MatchRequest.ExpectedPlayerCount = MatchRequest.Participants.Num();
+
+            if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
+            {
+                if (MatchRequest.Participants.Num() > 0)
+                {
+                    GameInstance->SubmitMatchComplete(MatchRequest);
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("MultiplayerGameMode: Match complete submission skipped because no participants were collected."));
+                }
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("MultiplayerGameMode: Match complete submission skipped because GameInstance cast failed."));
             }
         }, 2.0f, false);
     }

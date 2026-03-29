@@ -8,6 +8,7 @@
 ACharacterPlayerState::ACharacterPlayerState()
 {
     SelectedCharacterID = NAME_None;
+    BackendUserId = TEXT("");
     CachedCharacterData = nullptr;
     bAlwaysRelevant = true;
     SetNetUpdateFrequency(10.0f);
@@ -62,6 +63,27 @@ void ACharacterPlayerState::Server_SetSelectedCharacterID_Implementation(FName C
     OnRep_SelectedCharacterID();
 }
 
+bool ACharacterPlayerState::Server_SetBackendUserId_Validate(const FString& InBackendUserId)
+{
+    const FString Sanitized = InBackendUserId.TrimStartAndEnd();
+    return !Sanitized.IsEmpty() && Sanitized.Len() <= 64;
+}
+
+void ACharacterPlayerState::Server_SetBackendUserId_Implementation(const FString& InBackendUserId)
+{
+    const FString Sanitized = InBackendUserId.TrimStartAndEnd().Left(64);
+    if (Sanitized.IsEmpty())
+    {
+        return;
+    }
+
+    if (BackendUserId != Sanitized)
+    {
+        BackendUserId = Sanitized;
+        ForceNetUpdate();
+    }
+}
+
 UCharacterDataAsset* ACharacterPlayerState::GetSelectedCharacter() const
 {
     return CachedCharacterData;
@@ -77,6 +99,7 @@ void ACharacterPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
     DOREPLIFETIME(ACharacterPlayerState, SelectedCharacterID);
+    DOREPLIFETIME(ACharacterPlayerState, BackendUserId);
 }
 
 void ACharacterPlayerState::OnRep_SelectedCharacterID()

@@ -223,6 +223,120 @@ struct FMatchRewardResponse
     FString ErrorMessage;
 };
 
+USTRUCT(BlueprintType)
+struct FMatchParticipantPayload
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    FString UserId;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    FString PlayerName;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    int32 PlayerId = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    FString CharacterId;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    int32 Placement = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    int32 EliminationOrder = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    float SurvivalTimeSeconds = 0.0f;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    bool bIsWinner = false;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    bool bIsAliveAtEnd = false;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    bool bDisconnected = false;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    FString DisconnectReason;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    int32 KillCount = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    int32 DeathCount = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    float DamageDealt = 0.0f;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    float DamageTaken = 0.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FMatchCompleteRequest
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    FString MatchId;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    FString MapName;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    FString GameMode;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    FString StartedAt;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    FString EndedAt;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    int32 DurationSeconds = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    int32 ExpectedPlayerCount = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    TArray<FMatchParticipantPayload> Participants;
+};
+
+USTRUCT(BlueprintType)
+struct FMatchCompleteResponse
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    bool bSuccess = false;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    FString MatchId;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    bool bIdempotentReplay = false;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    int32 ParticipantsSaved = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    int32 RewardsProcessed = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    int32 MyRewardAmount = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    int32 MyNewRemnantCount = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    bool bMyIsWinner = false;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Match")
+    FString ErrorMessage;
+};
+
 // Callback types
 DECLARE_DELEGATE_OneParam(FOnAuthResponse, const FAuthResponse&);
 DECLARE_DELEGATE_OneParam(FOnProfileResponse, const FUserProfile&);
@@ -234,6 +348,7 @@ DECLARE_DELEGATE_OneParam(FOnRemnantPackagesResponse, const TArray<FRemnantPacka
 DECLARE_DELEGATE_OneParam(FOnCharacterPurchaseResponse, const FCharacterPurchaseResponse&);
 DECLARE_DELEGATE_OneParam(FOnRemnantPurchaseResponse, const FRemnantPurchaseResponse&);
 DECLARE_DELEGATE_OneParam(FOnMatchRewardResponse, const FMatchRewardResponse&);
+DECLARE_DELEGATE_OneParam(FOnMatchCompleteResponse, const FMatchCompleteResponse&);
 
 UCLASS()
 class REMNANTBORN_API UEdsHttpService : public UObject
@@ -266,6 +381,7 @@ public:
     void BuyCharacter(const FString& AuthToken, const FString& CharacterId, FOnCharacterPurchaseResponse Callback);
     void BuyRemnants(const FString& AuthToken, const FString& PackageId, const FString& CardNumber, const FString& CardExpiry, const FString& CardCVV, FOnRemnantPurchaseResponse Callback);
     void SubmitMatchReward(const FString& AuthToken, bool bIsWinner, float MatchDuration, int32 EliminationOrder, const FString& MatchId, FOnMatchRewardResponse Callback);
+    void SubmitMatchComplete(const FString& AuthToken, const FMatchCompleteRequest& MatchRequest, FOnMatchCompleteResponse Callback);
     
     // === Local Storage ===
     bool LoadSavedAuth(FString& OutToken, FString& OutUserId);

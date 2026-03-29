@@ -29,6 +29,15 @@ public:
     UFUNCTION(Server, Reliable, WithValidation, Category = "Character Selection")
     void Server_SetSelectedCharacterID(FName CharacterID);
 
+    UFUNCTION(Server, Reliable, WithValidation, Category = "Backend")
+    void Server_SetBackendUserId(const FString& InBackendUserId);
+
+    UFUNCTION(BlueprintPure, Category = "Backend")
+    FString GetBackendUserId() const { return BackendUserId; }
+
+    UFUNCTION(BlueprintPure, Category = "Backend")
+    bool HasBackendUserId() const { return !BackendUserId.IsEmpty(); }
+
     // Called when character selection is ready (replicated)
     UFUNCTION(BlueprintImplementableEvent, Category = "Character Selection")
     void OnCharacterSelectionReady();
@@ -58,6 +67,9 @@ protected:
 private:
     UPROPERTY(ReplicatedUsing = OnRep_SelectedCharacterID)
     FName SelectedCharacterID;
+
+    UPROPERTY(Replicated)
+    FString BackendUserId;
 
     UPROPERTY()
     UCharacterDataAsset* CachedCharacterData;

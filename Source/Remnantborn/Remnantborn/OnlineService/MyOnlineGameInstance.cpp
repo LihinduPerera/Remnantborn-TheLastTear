@@ -63,6 +63,7 @@ void UMyOnlineGameInstance::Init()
     if (HttpService)
     {
         HttpService->Initialize(TEXT("https://remnantborn-thelasttear.onrender.com/api"));
+        // HttpService->Initialize(TEXT("http://localhost:3000/api"));
         
         // Try to load saved authentication
         LoadSavedAuth();
@@ -1192,6 +1193,50 @@ void UMyOnlineGameInstance::SubmitMatchReward(bool bIsWinner, float MatchDuratio
             else
             {
                 UE_LOG(LogTemp, Warning, TEXT("Match reward submission failed: %s"), *Response.ErrorMessage);
+            }
+        }));
+}
+
+void UMyOnlineGameInstance::SubmitMatchComplete(const FMatchCompleteRequest& MatchRequest)
+{
+    if (!HttpService || !bIsLoggedIn || AuthToken.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Cannot submit match completion: Not logged in"));
+        OnMatchCompleteSubmitted.Broadcast(false, MatchRequest.MatchId, false);
+        return;
+    }
+
+    if (MatchRequest.MatchId.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Cannot submit match completion: MatchId is empty"));
+        OnMatchCompleteSubmitted.Broadcast(false, MatchRequest.MatchId, false);
+        return;
+    }
+
+    HttpService->SubmitMatchComplete(AuthToken, MatchRequest,
+        FOnMatchCompleteResponse::CreateLambda([this](const FMatchCompleteResponse& Response)
+        {
+            if (Response.bSuccess)
+            {
+                if (Response.MyNewRemnantCount > 0 || Response.MyRewardAmount > 0)
+                {
+                    CurrentUserProfile.RemnantCount = Response.MyNewRemnantCount;
+                    OnProfileUpdated.Broadcast(CurrentUserProfile);
+                    OnMatchRewardReceived.Broadcast(Response.MyRewardAmount, Response.MyNewRemnantCount, Response.bMyIsWinner);
+                }
+
+                UE_LOG(LogTemp, Log, TEXT("Match completion submitted: match=%s, participants=%d, rewards=%d, idempotent=%s"),
+                    *Response.MatchId,
+                    Response.ParticipantsSaved,
+                    Response.RewardsProcessed,
+                    Response.bIdempotentReplay ? TEXT("YES") : TEXT("NO"));
+
+                OnMatchCompleteSubmitted.Broadcast(true, Response.MatchId, Response.bIdempotentReplay);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Match completion submission failed: %s"), *Response.ErrorMessage);
+                OnMatchCompleteSubmitted.Broadcast(false, Response.MatchId, Response.bIdempotentReplay);
             }
         }));
 }

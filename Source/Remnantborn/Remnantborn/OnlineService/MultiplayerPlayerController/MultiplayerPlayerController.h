@@ -70,6 +70,9 @@ private:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SetPlayerDisplayName(const FString& DisplayName);
 
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_SetBackendUserId(const FString& BackendUserId);
+
 	// Match results widget
 	UPROPERTY()
 	UMatchResultsWidget* MatchResultsWidget;
@@ -80,4 +83,6 @@ private:
 
 	FTimerHandle DisplayNameSyncTimerHandle;
 	int32 DisplayNameSyncAttempts = 0;
+	bool bDisplayNameSynced = false;
+	bool bBackendUserIdSynced = false;
 };

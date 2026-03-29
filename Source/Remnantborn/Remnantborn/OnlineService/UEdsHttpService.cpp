@@ -17,6 +17,7 @@ const FString UEdsHttpService::USER_ID_KEY = TEXT("UserId");
 UEdsHttpService::UEdsHttpService()
 {
     BaseUrl = TEXT("https://remnantborn-thelasttear.onrender.com/api");
+    // BaseUrl = TEXT("http://localhost:3000/api");
 }
 
 void UEdsHttpService::Initialize(const FString& InBaseUrl)
@@ -485,6 +486,163 @@ void UEdsHttpService::SubmitMatchReward(const FString& AuthToken, bool bIsWinner
                         if (Result.ErrorMessage.IsEmpty())
                         {
                             Result.ErrorMessage = FString::Printf(TEXT("Match reward submission failed (Code: %d)"), Response->GetResponseCode());
+                        }
+                    }
+                }
+                else
+                {
+                    Result.bSuccess = false;
+                    Result.ErrorMessage = TEXT("Invalid response format");
+                }
+            }
+
+            if (Callback.IsBound())
+            {
+                Callback.Execute(Result);
+            }
+        });
+}
+
+void UEdsHttpService::SubmitMatchComplete(const FString& AuthToken, const FMatchCompleteRequest& MatchRequest, FOnMatchCompleteResponse Callback)
+{
+    TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject());
+    JsonObject->SetStringField(TEXT("matchId"), MatchRequest.MatchId);
+
+    if (!MatchRequest.MapName.IsEmpty())
+    {
+        JsonObject->SetStringField(TEXT("mapName"), MatchRequest.MapName);
+    }
+
+    if (!MatchRequest.GameMode.IsEmpty())
+    {
+        JsonObject->SetStringField(TEXT("gameMode"), MatchRequest.GameMode);
+    }
+
+    if (!MatchRequest.StartedAt.IsEmpty())
+    {
+        JsonObject->SetStringField(TEXT("startedAt"), MatchRequest.StartedAt);
+    }
+
+    if (!MatchRequest.EndedAt.IsEmpty())
+    {
+        JsonObject->SetStringField(TEXT("endedAt"), MatchRequest.EndedAt);
+    }
+
+    JsonObject->SetNumberField(TEXT("durationSeconds"), MatchRequest.DurationSeconds);
+    JsonObject->SetNumberField(TEXT("expectedPlayerCount"), MatchRequest.ExpectedPlayerCount > 0 ? MatchRequest.ExpectedPlayerCount : MatchRequest.Participants.Num());
+
+    TArray<TSharedPtr<FJsonValue>> ParticipantsArray;
+    ParticipantsArray.Reserve(MatchRequest.Participants.Num());
+
+    for (const FMatchParticipantPayload& Participant : MatchRequest.Participants)
+    {
+        TSharedPtr<FJsonObject> ParticipantObject = MakeShareable(new FJsonObject());
+
+        if (!Participant.UserId.IsEmpty())
+        {
+            ParticipantObject->SetStringField(TEXT("userId"), Participant.UserId);
+        }
+
+        ParticipantObject->SetStringField(TEXT("playerName"), Participant.PlayerName);
+        ParticipantObject->SetNumberField(TEXT("playerId"), Participant.PlayerId);
+
+        if (!Participant.CharacterId.IsEmpty())
+        {
+            ParticipantObject->SetStringField(TEXT("characterId"), Participant.CharacterId);
+        }
+
+        ParticipantObject->SetNumberField(TEXT("placement"), Participant.Placement);
+        ParticipantObject->SetNumberField(TEXT("eliminationOrder"), Participant.EliminationOrder);
+        ParticipantObject->SetNumberField(TEXT("survivalTimeSeconds"), Participant.SurvivalTimeSeconds);
+        ParticipantObject->SetBoolField(TEXT("isWinner"), Participant.bIsWinner);
+        ParticipantObject->SetBoolField(TEXT("isAliveAtEnd"), Participant.bIsAliveAtEnd);
+        ParticipantObject->SetBoolField(TEXT("disconnected"), Participant.bDisconnected);
+
+        if (!Participant.DisconnectReason.IsEmpty())
+        {
+            ParticipantObject->SetStringField(TEXT("disconnectReason"), Participant.DisconnectReason);
+        }
+
+        ParticipantObject->SetNumberField(TEXT("killCount"), Participant.KillCount);
+        ParticipantObject->SetNumberField(TEXT("deathCount"), Participant.DeathCount);
+        ParticipantObject->SetNumberField(TEXT("damageDealt"), Participant.DamageDealt);
+        ParticipantObject->SetNumberField(TEXT("damageTaken"), Participant.DamageTaken);
+
+        ParticipantsArray.Add(MakeShareable(new FJsonValueObject(ParticipantObject)));
+    }
+
+    JsonObject->SetArrayField(TEXT("participants"), ParticipantsArray);
+
+    SendRequestWithAuth(TEXT("/match/complete"), TEXT("POST"), JsonObject, AuthToken,
+        [Callback](const FHttpResponsePtr& Response, bool bSuccess)
+        {
+            FMatchCompleteResponse Result;
+
+            if (!bSuccess || !Response.IsValid())
+            {
+                Result.bSuccess = false;
+                Result.ErrorMessage = TEXT("Network error");
+            }
+            else
+            {
+                TSharedPtr<FJsonObject> JsonResp;
+                TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
+
+                if (FJsonSerializer::Deserialize(Reader, JsonResp) && JsonResp.IsValid())
+                {
+                    bool bSuccessField = false;
+                    JsonResp->TryGetBoolField(TEXT("success"), bSuccessField);
+                    Result.bSuccess = bSuccessField && (Response->GetResponseCode() == 200 || Response->GetResponseCode() == 201);
+
+                    const TSharedPtr<FJsonObject>* DataObjectPtr = nullptr;
+                    const TSharedPtr<FJsonObject> DataObject =
+                        JsonResp->TryGetObjectField(TEXT("data"), DataObjectPtr) && DataObjectPtr != nullptr
+                        ? *DataObjectPtr
+                        : JsonResp;
+
+                    if (DataObject.IsValid())
+                    {
+                        DataObject->TryGetStringField(TEXT("match_id"), Result.MatchId);
+                        DataObject->TryGetBoolField(TEXT("idempotent_replay"), Result.bIdempotentReplay);
+
+                        double ParticipantsSaved = 0.0;
+                        if (DataObject->TryGetNumberField(TEXT("participants_saved"), ParticipantsSaved))
+                        {
+                            Result.ParticipantsSaved = static_cast<int32>(ParticipantsSaved);
+                        }
+
+                        double RewardsProcessed = 0.0;
+                        if (DataObject->TryGetNumberField(TEXT("rewards_processed"), RewardsProcessed))
+                        {
+                            Result.RewardsProcessed = static_cast<int32>(RewardsProcessed);
+                        }
+
+                        const TSharedPtr<FJsonObject>* MyResultPtr = nullptr;
+                        if (DataObject->TryGetObjectField(TEXT("my_result"), MyResultPtr) && MyResultPtr != nullptr)
+                        {
+                            const TSharedPtr<FJsonObject>& MyResult = *MyResultPtr;
+                            double MyRewardAmount = 0.0;
+                            if (MyResult->TryGetNumberField(TEXT("reward_amount"), MyRewardAmount))
+                            {
+                                Result.MyRewardAmount = static_cast<int32>(MyRewardAmount);
+                            }
+
+                            double MyNewCount = 0.0;
+                            if (MyResult->TryGetNumberField(TEXT("new_remnant_count"), MyNewCount))
+                            {
+                                Result.MyNewRemnantCount = static_cast<int32>(MyNewCount);
+                            }
+
+                            MyResult->TryGetBoolField(TEXT("is_winner"), Result.bMyIsWinner);
+                        }
+                    }
+
+                    if (!Result.bSuccess)
+                    {
+                        JsonResp->TryGetStringField(TEXT("message"), Result.ErrorMessage);
+                        if (Result.ErrorMessage.IsEmpty())
+                        {
+                            Result.ErrorMessage = FString::Printf(TEXT("Match completion submission failed (Code: %d)"), Response->GetResponseCode());
                         }
                     }
                 }

@@ -18,6 +18,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSessionDestroyed);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAuthStateChanged, bool, bIsLoggedIn);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnProfileUpdated, const FUserProfile&, UserProfile);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnMatchRewardReceived, int32, RewardAmount, int32, NewRemnantCount, bool, bIsWinner);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnMatchCompleteSubmitted, bool, bSuccess, const FString&, MatchId, bool, bIdempotentReplay);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAvatarUploadComplete, bool, bSuccess);
 
 USTRUCT(BlueprintType)
@@ -246,6 +247,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Authentication")
     void SubmitMatchReward(bool bIsWinner, float MatchDuration, int32 EliminationOrder, const FString& MatchId = "");
+
+    UFUNCTION(BlueprintCallable, Category = "Match")
+    void SubmitMatchComplete(const FMatchCompleteRequest& MatchRequest);
     
     // === Getters ===
     UFUNCTION(BlueprintPure, Category = "Authentication")
@@ -289,6 +293,9 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Match|Events")
     FOnMatchRewardReceived OnMatchRewardReceived;
+
+    UPROPERTY(BlueprintAssignable, Category = "Match|Events")
+    FOnMatchCompleteSubmitted OnMatchCompleteSubmitted;
     
     // === Data for Blueprint ===
     UPROPERTY(BlueprintReadOnly, Category = "Multiplayer")
