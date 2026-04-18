@@ -2,6 +2,71 @@ const { supabase } = require('../config/database');
 const { cloudinary } = require('../config/cloudinary');
 const ApiResponse = require('../utils/response');
 
+const TABLE_NOT_FOUND_CODE = '42P01';
+
+async function getRecentMatchHistory(userId, limit = 10) {
+  try {
+    const { data: participants, error: participantError } = await supabase
+      .from('match_participants')
+      .select('match_result_id, placement, elimination_order, survival_time_seconds, is_winner, character_id, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (participantError) {
+      if (participantError.code === TABLE_NOT_FOUND_CODE) {
+        return [];
+      }
+      throw participantError;
+    }
+
+    if (!participants || participants.length === 0) {
+      return [];
+    }
+
+    const matchResultIds = [...new Set(participants.map((entry) => entry.match_result_id).filter(Boolean))];
+    if (matchResultIds.length === 0) {
+      return [];
+    }
+
+    const { data: matches, error: matchError } = await supabase
+      .from('match_results')
+      .select('id, match_id, map_name, game_mode, ended_at, duration_seconds, is_draw, winner_user_id')
+      .in('id', matchResultIds);
+
+    if (matchError) {
+      if (matchError.code === TABLE_NOT_FOUND_CODE) {
+        return [];
+      }
+      throw matchError;
+    }
+
+    const matchById = new Map((matches || []).map((match) => [match.id, match]));
+
+    return participants.map((participant) => {
+      const match = matchById.get(participant.match_result_id) || {};
+      const isWinner = Boolean(participant.is_winner);
+      return {
+        match_id: match.match_id || null,
+        map_name: match.map_name || 'UnknownMap',
+        game_mode: match.game_mode || 'unknown',
+        ended_at: match.ended_at || participant.created_at || null,
+        duration_seconds: Number(match.duration_seconds || 0),
+        is_draw: Boolean(match.is_draw),
+        placement: Number(participant.placement || 0),
+        elimination_order: Number(participant.elimination_order || 0),
+        survival_time_seconds: Number(participant.survival_time_seconds || 0),
+        is_winner: isWinner,
+        character_id: participant.character_id || null,
+        reward_amount: isWinner ? 15 : 5,
+      };
+    });
+  } catch (error) {
+    console.error('Get recent match history error:', error);
+    return [];
+  }
+}
+
 class ProfileController {
   // Get user profile
   async getProfile(req, res) {
@@ -32,6 +97,7 @@ class ProfileController {
       
       // Format purchased items
       const purchasedItems = profile.purchases?.map(purchase => purchase.item_id) || [];
+      const matchHistory = await getRecentMatchHistory(userId, 10);
       
       const response = {
         userId: profile.user_id,
@@ -43,7 +109,8 @@ class ProfileController {
         created_at: profile.created_at,
         last_active: profile.last_active,
         updated_at: profile.updated_at,
-        purchased_items: purchasedItems
+        purchased_items: purchasedItems,
+        match_history: matchHistory
       };
       
       return ApiResponse.success(res, response, 'Profile retrieved successfully');
@@ -78,6 +145,7 @@ class ProfileController {
       
       // Format purchased items
       const purchasedItems = profile.purchases?.map(purchase => purchase.item_id) || [];
+      const matchHistory = await getRecentMatchHistory(userId, 10);
       
       const response = {
         userId: profile.user_id,
@@ -89,7 +157,8 @@ class ProfileController {
         created_at: profile.created_at,
         last_active: profile.last_active,
         updated_at: profile.updated_at,
-        purchased_items: purchasedItems
+        purchased_items: purchasedItems,
+        match_history: matchHistory
       };
       
       return ApiResponse.success(res, response, 'Profile retrieved successfully');

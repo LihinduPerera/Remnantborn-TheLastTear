@@ -8,6 +8,48 @@
 #include "Interfaces/IHttpResponse.h"
 #include "UEdsHttpService.generated.h"
 
+USTRUCT(BlueprintType)
+struct FProfileMatchHistoryEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    FString MatchId;
+
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    FString MapName;
+
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    FString GameMode;
+
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    FString EndedAt;
+
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    int32 DurationSeconds = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    bool bIsDraw = false;
+
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    int32 Placement = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    int32 EliminationOrder = 0;
+
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    float SurvivalTimeSeconds = 0.0f;
+
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    bool bIsWinner = false;
+
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    FString CharacterId;
+
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    int32 RewardAmount = 0;
+};
+
 // User Profile Structure
 USTRUCT(BlueprintType)
 struct FUserProfile
@@ -46,6 +88,9 @@ struct FUserProfile
     
     UPROPERTY(BlueprintReadWrite, Category = "User Profile")
     TArray<FString> PurchasedItems;
+
+    UPROPERTY(BlueprintReadWrite, Category = "User Profile")
+    TArray<FProfileMatchHistoryEntry> MatchHistory;
     
     UPROPERTY(BlueprintReadWrite, Category = "User Profile")
     bool bIsValid = false;

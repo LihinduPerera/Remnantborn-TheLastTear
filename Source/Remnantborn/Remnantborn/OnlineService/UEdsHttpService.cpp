@@ -16,8 +16,8 @@ const FString UEdsHttpService::USER_ID_KEY = TEXT("UserId");
 
 UEdsHttpService::UEdsHttpService()
 {
-    BaseUrl = TEXT("https://remnantborn-thelasttear.onrender.com/api");
-    // BaseUrl = TEXT("http://localhost:3000/api");
+    // BaseUrl = TEXT("https://remnantborn-thelasttear.onrender.com/api");
+    BaseUrl = TEXT("http://localhost:3000/api");
 }
 
 void UEdsHttpService::Initialize(const FString& InBaseUrl)
@@ -1219,6 +1219,63 @@ FUserProfile UEdsHttpService::ParseUserProfile(const TSharedPtr<FJsonObject>& Js
             {
                 Profile.PurchasedItems.Add(ItemStr);
             }
+        }
+    }
+
+    // Parse recent match history
+    const TArray<TSharedPtr<FJsonValue>>* MatchHistoryArray = nullptr;
+    if (!JsonObject->TryGetArrayField(TEXT("match_history"), MatchHistoryArray))
+    {
+        JsonObject->TryGetArrayField(TEXT("recent_matches"), MatchHistoryArray);
+    }
+
+    if (MatchHistoryArray != nullptr)
+    {
+        for (const TSharedPtr<FJsonValue>& MatchValue : *MatchHistoryArray)
+        {
+            const TSharedPtr<FJsonObject>* MatchObjectPtr = nullptr;
+            if (!MatchValue.IsValid() || !MatchValue->TryGetObject(MatchObjectPtr) || MatchObjectPtr == nullptr)
+            {
+                continue;
+            }
+
+            const TSharedPtr<FJsonObject>& MatchObject = *MatchObjectPtr;
+            FProfileMatchHistoryEntry Entry;
+
+            if (!MatchObject->TryGetStringField(TEXT("match_id"), Entry.MatchId))
+            {
+                MatchObject->TryGetStringField(TEXT("matchId"), Entry.MatchId);
+            }
+
+            if (!MatchObject->TryGetStringField(TEXT("map_name"), Entry.MapName))
+            {
+                MatchObject->TryGetStringField(TEXT("mapName"), Entry.MapName);
+            }
+
+            if (!MatchObject->TryGetStringField(TEXT("game_mode"), Entry.GameMode))
+            {
+                MatchObject->TryGetStringField(TEXT("gameMode"), Entry.GameMode);
+            }
+
+            if (!MatchObject->TryGetStringField(TEXT("ended_at"), Entry.EndedAt))
+            {
+                MatchObject->TryGetStringField(TEXT("endedAt"), Entry.EndedAt);
+            }
+
+            MatchObject->TryGetNumberField(TEXT("duration_seconds"), Entry.DurationSeconds);
+            MatchObject->TryGetNumberField(TEXT("placement"), Entry.Placement);
+            MatchObject->TryGetNumberField(TEXT("elimination_order"), Entry.EliminationOrder);
+            MatchObject->TryGetNumberField(TEXT("survival_time_seconds"), Entry.SurvivalTimeSeconds);
+            MatchObject->TryGetBoolField(TEXT("is_winner"), Entry.bIsWinner);
+            MatchObject->TryGetBoolField(TEXT("is_draw"), Entry.bIsDraw);
+            MatchObject->TryGetNumberField(TEXT("reward_amount"), Entry.RewardAmount);
+
+            if (!MatchObject->TryGetStringField(TEXT("character_id"), Entry.CharacterId))
+            {
+                MatchObject->TryGetStringField(TEXT("characterId"), Entry.CharacterId);
+            }
+
+            Profile.MatchHistory.Add(Entry);
         }
     }
     

@@ -7,9 +7,11 @@
 #include "Components/Button.h"
 #include "Components/ScrollBox.h"
 #include "Interfaces/IHttpRequest.h"
+#include "Remnantborn/Remnantborn/OnlineService/UEdsHttpService.h"
 #include "UserProfileWidget.generated.h"
 
 class UOwnedCharacterCardWidget;
+class UMatchHistoryCardWidget;
 class UProfileEditWidget; // forward declare profile editor
 class UWidget; // container used for login gating
 
@@ -78,6 +80,12 @@ private:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	UTextBlock* MemberSinceText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	UScrollBox* MatchHistoryScrollBox;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* MatchHistoryText;
     
 	UPROPERTY(meta = (BindWidget))
 	UImage* AvatarImage;
@@ -93,6 +101,9 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Widgets")
 	TSubclassOf<UOwnedCharacterCardWidget> OwnedCharacterCardClass;
+
+	UPROPERTY(EditAnywhere, Category = "Widgets")
+	TSubclassOf<UMatchHistoryCardWidget> MatchHistoryCardClass;
 
 	// button that appears on the profile page to launch the editor
 	UPROPERTY(meta = (BindWidget))
@@ -110,8 +121,12 @@ private:
 private:
 	FString CurrentAvatarUrl;
 
+	UPROPERTY(EditAnywhere, Category = "Profile")
+	int32 MaxMatchHistoryRows = 5;
+
 	// download helper
 	void LoadAvatarFromUrl(const FString& Url);
 	void OnAvatarDownloaded(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bSuccess);
+	void UpdateMatchHistoryDisplay(const FUserProfile& UserProfile);
 
 };

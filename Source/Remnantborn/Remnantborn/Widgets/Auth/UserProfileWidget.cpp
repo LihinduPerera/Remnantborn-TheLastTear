@@ -3,11 +3,15 @@
 #include "Remnantborn/Remnantborn/OnlineService/MyOnlineGameInstance.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
 #include "OwnedCharacterCardWidget.h"
+#include "MatchHistoryCardWidget.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Button.h"
 #include "Components/ScrollBox.h"
+#include "Components/PanelWidget.h"
 #include "Engine/Texture2D.h"
+#include "UObject/UObjectGlobals.h"
+#include "Blueprint/WidgetTree.h"
 
 #include "HttpModule.h"
 #include "Interfaces/IHttpRequest.h"
@@ -54,6 +58,44 @@ void UUserProfileWidget::NativeConstruct()
 	if (ProfileEditWidget)
 	{
 		ProfileEditWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	if (!MatchHistoryCardClass)
+	{
+		MatchHistoryCardClass = LoadClass<UMatchHistoryCardWidget>(
+			nullptr,
+			TEXT("/Game/Widgets/Auth/WBP_MatchHistoryCardWidget.WBP_MatchHistoryCardWidget_C")
+		);
+
+		if (!MatchHistoryCardClass)
+		{
+			MatchHistoryCardClass = UMatchHistoryCardWidget::StaticClass();
+		}
+	}
+
+	if (!MatchHistoryScrollBox && WidgetTree)
+	{
+		MatchHistoryScrollBox = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("DynamicMatchHistoryScrollBox"));
+		if (MatchHistoryScrollBox)
+		{
+			if (UPanelWidget* Root = Cast<UPanelWidget>(GetRootWidget()))
+			{
+				Root->AddChild(MatchHistoryScrollBox);
+			}
+		}
+	}
+
+	if (!MatchHistoryText && WidgetTree)
+	{
+		MatchHistoryText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("DynamicMatchHistoryText"));
+		if (MatchHistoryText)
+		{
+			if (UPanelWidget* Root = Cast<UPanelWidget>(GetRootWidget()))
+			{
+				Root->AddChild(MatchHistoryText);
+				MatchHistoryText->SetText(FText::FromString(TEXT("Recent Matches: none yet")));
+			}
+		}
 	}
 
 	// Subscribe to profile/auth changes so widget works anywhere (tabs, menus, etc.)
@@ -217,6 +259,7 @@ void UUserProfileWidget::HandleProfileUpdated(const FUserProfile& UserProfile)
 			UserProfile.Bio,
 			UserProfile.CreatedAt
 		);
+		UpdateMatchHistoryDisplay(UserProfile);
 	}
 }
 
@@ -228,11 +271,90 @@ void UUserProfileWidget::HandleAuthStateChanged(bool bIsLoggedIn)
 	{
 		// logged out state – clear fields and owned characters list
 		UpdateProfile(TEXT(""), 0, 0, TEXT(""));
+		if (MatchHistoryScrollBox)
+		{
+			MatchHistoryScrollBox->ClearChildren();
+		}
+		if (MatchHistoryText)
+		{
+			MatchHistoryText->SetText(FText::GetEmpty());
+		}
 		if (CharacterScrollBox)
 		{
 			CharacterScrollBox->ClearChildren();
 		}
 	}
+}
+
+void UUserProfileWidget::UpdateMatchHistoryDisplay(const FUserProfile& UserProfile)
+{
+	if (MatchHistoryScrollBox)
+	{
+		MatchHistoryScrollBox->ClearChildren();
+
+		if (UserProfile.MatchHistory.Num() > 0 && MatchHistoryCardClass)
+		{
+			const int32 MaxRows = FMath::Max(1, MaxMatchHistoryRows);
+			const int32 RowsToShow = FMath::Min(MaxRows, UserProfile.MatchHistory.Num());
+
+			for (int32 Index = 0; Index < RowsToShow; ++Index)
+			{
+				UMatchHistoryCardWidget* Card = CreateWidget<UMatchHistoryCardWidget>(this, MatchHistoryCardClass);
+				if (!Card)
+				{
+					continue;
+				}
+
+				Card->InitializeCard(UserProfile.MatchHistory[Index]);
+				MatchHistoryScrollBox->AddChild(Card);
+			}
+
+			if (MatchHistoryText)
+			{
+				MatchHistoryText->SetText(FText::GetEmpty());
+			}
+
+			return;
+		}
+	}
+
+	if (!MatchHistoryText)
+	{
+		return;
+	}
+
+	if (UserProfile.MatchHistory.Num() == 0)
+	{
+		MatchHistoryText->SetText(FText::FromString(TEXT("Recent Matches: none yet")));
+		return;
+	}
+
+	const int32 MaxRows = FMath::Max(1, MaxMatchHistoryRows);
+	const int32 RowsToShow = FMath::Min(MaxRows, UserProfile.MatchHistory.Num());
+
+	FString HistoryText = TEXT("Recent Matches:\n");
+	for (int32 Index = 0; Index < RowsToShow; ++Index)
+	{
+		const FProfileMatchHistoryEntry& Entry = UserProfile.MatchHistory[Index];
+		const FString ResultLabel = Entry.bIsDraw ? TEXT("Draw") : (Entry.bIsWinner ? TEXT("Win") : TEXT("Loss"));
+		const FString MapLabel = Entry.MapName.IsEmpty() ? TEXT("UnknownMap") : Entry.MapName;
+		const int32 Placement = Entry.Placement > 0 ? Entry.Placement : (Entry.bIsWinner ? 1 : 0);
+		const FString PlacementLabel = Placement > 0 ? FString::Printf(TEXT("P%d"), Placement) : TEXT("P?");
+
+		HistoryText += FString::Printf(TEXT("%d) %s | %s | %s | %ds"),
+			Index + 1,
+			*ResultLabel,
+			*MapLabel,
+			*PlacementLabel,
+			FMath::Max(0, Entry.DurationSeconds));
+
+		if (Index < RowsToShow - 1)
+		{
+			HistoryText += TEXT("\n");
+		}
+	}
+
+	MatchHistoryText->SetText(FText::FromString(HistoryText));
 }
 
 

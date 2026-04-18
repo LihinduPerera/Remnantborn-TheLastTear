@@ -62,8 +62,8 @@ void UMyOnlineGameInstance::Init()
     HttpService = NewObject<UEdsHttpService>(this);
     if (HttpService)
     {
-        HttpService->Initialize(TEXT("https://remnantborn-thelasttear.onrender.com/api"));
-        // HttpService->Initialize(TEXT("http://localhost:3000/api"));
+        // HttpService->Initialize(TEXT("https://remnantborn-thelasttear.onrender.com/api"));
+        HttpService->Initialize(TEXT("http://localhost:3000/api"));
         
         // Try to load saved authentication
         LoadSavedAuth();
