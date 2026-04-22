@@ -93,7 +93,7 @@ void UUserProfileWidget::NativeConstruct()
 			if (UPanelWidget* Root = Cast<UPanelWidget>(GetRootWidget()))
 			{
 				Root->AddChild(MatchHistoryText);
-				MatchHistoryText->SetText(FText::FromString(TEXT("Recent Matches: none yet")));
+				MatchHistoryText->SetText(FText::GetEmpty());
 			}
 		}
 	}
@@ -288,6 +288,22 @@ void UUserProfileWidget::HandleAuthStateChanged(bool bIsLoggedIn)
 
 void UUserProfileWidget::UpdateMatchHistoryDisplay(const FUserProfile& UserProfile)
 {
+	UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance());
+	if (!GameInstance || !GameInstance->IsLoggedIn())
+	{
+		if (MatchHistoryScrollBox)
+		{
+			MatchHistoryScrollBox->ClearChildren();
+		}
+
+		if (MatchHistoryText)
+		{
+			MatchHistoryText->SetText(FText::GetEmpty());
+		}
+
+		return;
+	}
+
 	if (MatchHistoryScrollBox)
 	{
 		MatchHistoryScrollBox->ClearChildren();
@@ -374,6 +390,25 @@ void UUserProfileWidget::ApplyLoginGating(bool bIsLoggedIn)
 		if (!bIsLoggedIn)
 		{
 			LoginRequiredText->SetText(FText::FromString(TEXT("Please log in to access this feature.")));
+		}
+	}
+
+	// In layouts without ContentPanel/LoginRequiredText, explicitly hide guest match history UI.
+	if (MatchHistoryScrollBox)
+	{
+		MatchHistoryScrollBox->SetVisibility(bIsLoggedIn ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		if (!bIsLoggedIn)
+		{
+			MatchHistoryScrollBox->ClearChildren();
+		}
+	}
+
+	if (MatchHistoryText)
+	{
+		MatchHistoryText->SetVisibility(bIsLoggedIn ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		if (!bIsLoggedIn)
+		{
+			MatchHistoryText->SetText(FText::GetEmpty());
 		}
 	}
 }
