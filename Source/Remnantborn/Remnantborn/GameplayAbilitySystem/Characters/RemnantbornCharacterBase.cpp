@@ -10,6 +10,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/GameModeBase.h"
 #include "Remnantborn/Remnantborn/GameModes/MultiplayerGameMode.h"
+#include "Sound/SoundBase.h"
 
 // Sets default values
 ARemnantbornCharacterBase::ARemnantbornCharacterBase()
@@ -243,4 +244,61 @@ void ARemnantbornCharacterBase::SetupPlayerHUD()
 			}
 		}
 	}
+}
+
+bool ARemnantbornCharacterBase::HasDamageBurstGruntOverrides() const
+{
+	for (USoundBase* Sound : DamageBurstGruntOverrideSounds)
+	{
+		if (IsValid(Sound))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+USoundBase* ARemnantbornCharacterBase::GetRandomDamageBurstGruntOverride() const
+{
+	return PickRandomValidSound(DamageBurstGruntOverrideSounds);
+}
+
+USoundBase* ARemnantbornCharacterBase::SelectDamageBurstGruntSound(
+	const TArray<USoundBase*>& MaleFallbackSounds,
+	const TArray<USoundBase*>& FemaleFallbackSounds) const
+{
+	if (USoundBase* OverrideSound = GetRandomDamageBurstGruntOverride())
+	{
+		return OverrideSound;
+	}
+
+	const TArray<USoundBase*>& GenderFallbackSounds =
+		CharacterGender == ERemnantbornCharacterGender::Female
+			? FemaleFallbackSounds
+			: MaleFallbackSounds;
+
+	return PickRandomValidSound(GenderFallbackSounds);
+}
+
+USoundBase* ARemnantbornCharacterBase::PickRandomValidSound(const TArray<USoundBase*>& Sounds)
+{
+	TArray<USoundBase*> ValidSounds;
+	ValidSounds.Reserve(Sounds.Num());
+
+	for (USoundBase* Sound : Sounds)
+	{
+		if (IsValid(Sound))
+		{
+			ValidSounds.Add(Sound);
+		}
+	}
+
+	if (ValidSounds.Num() == 0)
+	{
+		return nullptr;
+	}
+
+	const int32 RandomIndex = FMath::RandRange(0, ValidSounds.Num() - 1);
+	return ValidSounds[RandomIndex];
 }

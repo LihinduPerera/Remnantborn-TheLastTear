@@ -9,6 +9,14 @@
 #include "RemnantbornCharacterBase.generated.h"
 
 class AMultiplayerGameMode;
+class USoundBase;
+
+UENUM(BlueprintType)
+enum class ERemnantbornCharacterGender : uint8
+{
+	Male UMETA(DisplayName = "Male"),
+	Female UMETA(DisplayName = "Female")
+};
 
 UCLASS()
 class REMNANTBORN_API ARemnantbornCharacterBase : public ACharacter, public IAbilitySystemInterface
@@ -32,6 +40,12 @@ protected:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="AbilitySystem")
 	TArray<TSubclassOf<UGameplayAbility>> StartingAbilities;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="Audio|Damage")
+	ERemnantbornCharacterGender CharacterGender = ERemnantbornCharacterGender::Male;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="Audio|Damage")
+	TArray<USoundBase*> DamageBurstGruntOverrideSounds;
 
 protected:
 	// Called when the game starts or when spawned
@@ -86,4 +100,21 @@ public:
 
 	// Helper function to set up player HUD
 	void SetupPlayerHUD();
+
+	UFUNCTION(BlueprintPure, Category="Audio|Damage")
+	ERemnantbornCharacterGender GetCharacterGender() const { return CharacterGender; }
+
+	UFUNCTION(BlueprintPure, Category="Audio|Damage")
+	bool HasDamageBurstGruntOverrides() const;
+
+	UFUNCTION(BlueprintPure, Category="Audio|Damage")
+	USoundBase* GetRandomDamageBurstGruntOverride() const;
+
+	UFUNCTION(BlueprintCallable, Category="Audio|Damage")
+	USoundBase* SelectDamageBurstGruntSound(
+		const TArray<USoundBase*>& MaleFallbackSounds,
+		const TArray<USoundBase*>& FemaleFallbackSounds) const;
+
+private:
+	static USoundBase* PickRandomValidSound(const TArray<USoundBase*>& Sounds);
 };
