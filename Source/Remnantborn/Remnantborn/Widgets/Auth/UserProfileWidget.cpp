@@ -141,7 +141,7 @@ void UUserProfileWidget::UpdateProfile(const FString& Username, int32 Level, int
     
     if (RemnantText)
     {
-        RemnantText->SetText(FText::FromString(FString::Printf(TEXT("Remnants: %d"), RemnantCount)));
+        RemnantText->SetText(FText::FromString(FString::Printf(TEXT("%d"), RemnantCount)));
     }
 
     if (EmailText)

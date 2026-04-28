@@ -519,17 +519,17 @@ void UMainMenuWidget::UpdateUserInfo()
         // Update user info texts
         if (WelcomeText)
         {
-            WelcomeText->SetText(FText::FromString(FString::Printf(TEXT("Welcome, %s!"), *CurrentUserProfile.Username)));
+            WelcomeText->SetText(FText::FromString(FString::Printf(TEXT("%s"), *CurrentUserProfile.Username)));
         }
         
         if (UserLevelText)
         {
-            UserLevelText->SetText(FText::FromString(FString::Printf(TEXT("Level: %d"), CurrentUserProfile.Level)));
+            UserLevelText->SetText(FText::FromString(FString::Printf(TEXT("Lv: %d"), CurrentUserProfile.Level)));
         }
         
         if (UserRemnantText)
         {
-            UserRemnantText->SetText(FText::FromString(FString::Printf(TEXT("Remnants: %d"), CurrentUserProfile.RemnantCount)));
+            UserRemnantText->SetText(FText::FromString(FString::Printf(TEXT(" %d"), CurrentUserProfile.RemnantCount)));
         }
         
         // show avatar if available
