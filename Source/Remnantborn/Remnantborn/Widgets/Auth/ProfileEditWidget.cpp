@@ -181,8 +181,9 @@ void UProfileEditWidget::OnSaveClicked()
 void UProfileEditWidget::OnCancelClicked()
 {
 	UpdateDisplayWithProfile();
-	// simply hide when cancelling
-	RemoveFromParent();
+    // hide when cancelling so the parent can show it again
+    SetVisibility(ESlateVisibility::Collapsed);
+    OnEditClosed.Broadcast();
 	if (StatusText)
 	{
 		StatusText->SetText(FText::FromString(TEXT("")));

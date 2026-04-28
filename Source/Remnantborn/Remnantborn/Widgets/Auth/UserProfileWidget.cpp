@@ -9,6 +9,7 @@
 #include "Components/Button.h"
 #include "Components/ScrollBox.h"
 #include "Components/PanelWidget.h"
+#include "Components/Widget.h"
 #include "Engine/Texture2D.h"
 #include "UObject/UObjectGlobals.h"
 #include "Blueprint/WidgetTree.h"
@@ -58,6 +59,7 @@ void UUserProfileWidget::NativeConstruct()
 	if (ProfileEditWidget)
 	{
 		ProfileEditWidget->SetVisibility(ESlateVisibility::Collapsed);
+		ProfileEditWidget->OnEditClosed.AddDynamic(this, &UUserProfileWidget::HandleEditClosed);
 	}
 
 	if (!MatchHistoryCardClass)
@@ -228,8 +230,13 @@ void UUserProfileWidget::OnEditProfileClicked()
 		{
 			ProfileEditWidget->SetProfileData(GI->GetCurrentUserProfile());
 		}
-		ProfileEditWidget->SetVisibility(ESlateVisibility::Visible);
+		ApplyEditMode(true);
 	}
+}
+
+void UUserProfileWidget::HandleEditClosed()
+{
+	ApplyEditMode(false);
 }
 
 void UUserProfileWidget::OnRefreshClicked()
@@ -410,6 +417,55 @@ void UUserProfileWidget::ApplyLoginGating(bool bIsLoggedIn)
 		{
 			MatchHistoryText->SetText(FText::GetEmpty());
 		}
+	}
+}
+
+void UUserProfileWidget::ApplyEditMode(bool bEditing)
+{
+	UMyOnlineGameInstance* GI = Cast<UMyOnlineGameInstance>(GetGameInstance());
+	const bool bIsLoggedIn = GI ? GI->IsLoggedIn() : true;
+	const ESlateVisibility ProfileVisibility = (!bEditing && bIsLoggedIn) ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
+
+	if (ProfileEditWidget)
+	{
+		ProfileEditWidget->SetVisibility(bEditing ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+
+	if (LoginRequiredText)
+	{
+		LoginRequiredText->SetVisibility((!bEditing && !bIsLoggedIn) ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+
+	if (ContentPanel)
+	{
+		ContentPanel->SetVisibility(ProfileVisibility);
+	}
+
+	auto SetProfileVisibility = [ProfileVisibility](UWidget* Widget)
+	{
+		if (Widget)
+		{
+			Widget->SetVisibility(ProfileVisibility);
+		}
+	};
+
+	SetProfileVisibility(UsernameText);
+	SetProfileVisibility(LevelText);
+	SetProfileVisibility(RemnantText);
+	SetProfileVisibility(EmailText);
+	SetProfileVisibility(BioText);
+	SetProfileVisibility(MemberSinceText);
+	SetProfileVisibility(AvatarImage);
+	SetProfileVisibility(LogoutButton);
+	SetProfileVisibility(RefreshButton);
+	SetProfileVisibility(EditProfileButton);
+	SetProfileVisibility(CharacterScrollBox);
+	SetProfileVisibility(MatchHistoryScrollBox);
+	SetProfileVisibility(MatchHistoryText);
+
+	if (!bEditing)
+	{
+		ApplyLoginGating(bIsLoggedIn);
 	}
 }
 

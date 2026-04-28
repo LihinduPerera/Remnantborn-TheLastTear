@@ -12,6 +12,8 @@
 #include "Remnantborn/Remnantborn/OnlineService/UEdsHttpService.h"
 #include "ProfileEditWidget.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnProfileEditClosed);
+
 UCLASS()
 class REMNANTBORN_API UProfileEditWidget : public UUserWidget
 {
@@ -19,6 +21,9 @@ class REMNANTBORN_API UProfileEditWidget : public UUserWidget
     
 public:
 	virtual void NativeConstruct() override;
+
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FOnProfileEditClosed OnEditClosed;
     
 	void SetProfileData(const FUserProfile& Profile);
     

@@ -41,6 +41,9 @@ public:
 	UFUNCTION()
 	void OnEditProfileClicked();
 
+	UFUNCTION()
+	void HandleEditClosed();
+
 	// callbacks from GameInstance
 	UFUNCTION()
 	void HandleProfileUpdated(const FUserProfile& UserProfile);
@@ -64,6 +67,9 @@ protected:
 private:
 	// helper used by several widgets to toggle login gate
 	void ApplyLoginGating(bool bIsLoggedIn);
+
+	// helper to toggle view vs edit mode
+	void ApplyEditMode(bool bEditing);
 
 	    
 	UPROPERTY(meta = (BindWidget))
