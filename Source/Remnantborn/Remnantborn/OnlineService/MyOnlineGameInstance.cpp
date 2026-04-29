@@ -62,8 +62,8 @@ void UMyOnlineGameInstance::Init()
     HttpService = NewObject<UEdsHttpService>(this);
     if (HttpService)
     {
-        // HttpService->Initialize(TEXT("https://remnantborn-thelasttear.onrender.com/api"));
-        HttpService->Initialize(TEXT("http://localhost:3000/api"));
+        HttpService->Initialize(TEXT("https://remnantborn-thelasttear.onrender.com/api"));
+        // HttpService->Initialize(TEXT("http://localhost:3000/api"));
         
         // Try to load saved authentication
         LoadSavedAuth();
@@ -1024,6 +1024,21 @@ void UMyOnlineGameInstance::GetMyProfile()
             UE_LOG(LogTemp, Warning, TEXT("Failed to load my profile"));
         }
     }));
+}
+
+void UMyOnlineGameInstance::ApplyProfileUpdate(const FUserProfile& Profile)
+{
+    CurrentUserProfile = Profile;
+
+    if (bIsLoggedIn)
+    {
+        if (UCharacterSelectionSubsystem* CharacterSubsystem = GetSubsystem<UCharacterSelectionSubsystem>())
+        {
+            CharacterSubsystem->SyncUnlocksFromBackend(Profile.PurchasedItems);
+        }
+    }
+
+    OnProfileUpdated.Broadcast(CurrentUserProfile);
 }
 
 void UMyOnlineGameInstance::UpdateProfile(const FString& Username, const FString& Bio)

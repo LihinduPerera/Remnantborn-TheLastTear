@@ -227,6 +227,9 @@ public:
     
     UFUNCTION(BlueprintCallable, Category = "Authentication")
     void GetMyProfile();
+
+    UFUNCTION(BlueprintCallable, Category = "Authentication")
+    void ApplyProfileUpdate(const FUserProfile& Profile);
     
     UFUNCTION(BlueprintCallable, Category = "Authentication")
     void UpdateProfile(const FString& Username, const FString& Bio);

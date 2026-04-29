@@ -79,7 +79,11 @@ void UStoreSubsystem::PurchaseCharacter(const FString& CharacterId)
             {
                 FUserProfile Profile = GameInstance->GetCurrentUserProfile();
                 Profile.RemnantCount = Response.NewRemnantCount;
-                GameInstance->OnProfileUpdated.Broadcast(Profile);
+                if (!CharacterId.IsEmpty() && !Profile.PurchasedItems.Contains(CharacterId))
+                {
+                    Profile.PurchasedItems.Add(CharacterId);
+                }
+                GameInstance->ApplyProfileUpdate(Profile);
                 GameInstance->GetMyProfile();
             }
 
@@ -124,7 +128,7 @@ void UStoreSubsystem::PurchaseRemnants(const FString& PackageId, const FString& 
             {
                 FUserProfile Profile = GameInstance->GetCurrentUserProfile();
                 Profile.RemnantCount = Response.NewRemnantCount;
-                GameInstance->OnProfileUpdated.Broadcast(Profile);
+                GameInstance->ApplyProfileUpdate(Profile);
                 GameInstance->GetMyProfile();
             }
 

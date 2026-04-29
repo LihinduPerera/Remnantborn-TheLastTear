@@ -532,10 +532,18 @@ void UMainMenuWidget::UpdateUserInfo()
             UserRemnantText->SetText(FText::FromString(FString::Printf(TEXT(" %d"), CurrentUserProfile.RemnantCount)));
         }
         
-        // show avatar if available
-        if (ProfileAvatarImage && !CurrentAvatarUrl.IsEmpty())
+        // refresh avatar when returning to the menu or when profile data changes
+        if (ProfileAvatarImage)
         {
-            ProfileAvatarImage->SetVisibility(ESlateVisibility::Visible);
+            const FString& AvatarUrl = CurrentUserProfile.AvatarUrl;
+            if (!AvatarUrl.IsEmpty() && AvatarUrl != CurrentAvatarUrl)
+            {
+                LoadAvatarFromUrl(AvatarUrl);
+            }
+            else if (!CurrentAvatarUrl.IsEmpty())
+            {
+                ProfileAvatarImage->SetVisibility(ESlateVisibility::Visible);
+            }
         }
     }
     else
