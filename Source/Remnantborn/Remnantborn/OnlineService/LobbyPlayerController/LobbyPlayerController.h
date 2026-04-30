@@ -52,6 +52,12 @@ public:
     UFUNCTION(Client, Reliable, Category = "Lobby")
     void Client_CleanupLobbyWidgets();
 
+    UFUNCTION(Client, Reliable, Category = "LoadingScreen")
+    void Client_ShowLoadingScreen();
+
+    UFUNCTION(Client, Reliable, Category = "LoadingScreen")
+    void Client_HideLoadingScreen();
+
     UFUNCTION(BlueprintPure, Category = "Lobby")
     class ULobbyWidget* GetLobbyWidget() const { return LobbyWidget; }
 

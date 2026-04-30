@@ -128,6 +128,22 @@ void ALobbyPlayerController::Client_CleanupLobbyWidgets_Implementation()
     bEnableMouseOverEvents = false;
 }
 
+void ALobbyPlayerController::Client_ShowLoadingScreen_Implementation()
+{
+    if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
+    {
+        GameInstance->ShowLoadingScreenWidget();
+    }
+}
+
+void ALobbyPlayerController::Client_HideLoadingScreen_Implementation()
+{
+    if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
+    {
+        GameInstance->HideLoadingScreenWidget();
+    }
+}
+
 void ALobbyPlayerController::HandleCharacterSelected(UCharacterDataAsset* CharacterData)
 {
     if (CharacterData)

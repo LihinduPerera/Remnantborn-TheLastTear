@@ -9,6 +9,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundCue.h"
 #include "Remnantborn/Remnantborn/CharacterSelection/CharacterSelectionSubsystem.h"
+#include "Blueprint/UserWidget.h"
+#include "MoviePlayer.h"
+#include "UObject/UObjectGlobals.h"
 
 #if WITH_EDITOR
 #include "DesktopPlatformModule.h"
@@ -38,6 +41,7 @@ UMyOnlineGameInstance::UMyOnlineGameInstance()
     CurrentTrackIndex = 0;
     MusicAudioComponent = nullptr;
     CurrentPlaylist = nullptr;
+    ActiveLoadingWidget = nullptr;
     
     // Initialize new music system variables
     PendingMusicState = EMusicState::Menu;
@@ -49,6 +53,9 @@ UMyOnlineGameInstance::UMyOnlineGameInstance()
 void UMyOnlineGameInstance::Init()
 {
     Super::Init();
+
+    FCoreUObjectDelegates::PreLoadMap.AddUObject(this, &UMyOnlineGameInstance::BeginLoadingScreen);
+    FCoreUObjectDelegates::PostLoadMapWithWorld.AddUObject(this, &UMyOnlineGameInstance::EndLoadingScreen);
     
     // Initialize Online Subsystem
     IOnlineSubsystem* OnlineSub = Online::GetSubsystem(GetWorld());
@@ -188,9 +195,83 @@ void UMyOnlineGameInstance::OnStart()
     }
 }
 
+void UMyOnlineGameInstance::BeginLoadingScreen(const FString& MapName)
+{
+    if (!bShowLoadingScreenOnMapLoad || IsRunningDedicatedServer())
+    {
+        return;
+    }
+
+    if (!LoadingScreenWidgetClass)
+    {
+        return;
+    }
+
+    ActiveLoadingWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
+    if (!ActiveLoadingWidget)
+    {
+        return;
+    }
+
+    FLoadingScreenAttributes LoadingScreen;
+    LoadingScreen.bAutoCompleteWhenLoadingCompletes = true;
+    LoadingScreen.bAllowInEarlyStartup = false;
+    LoadingScreen.bWaitForManualStop = false;
+    LoadingScreen.MinimumLoadingScreenDisplayTime = LoadingScreenMinDisplayTime;
+    LoadingScreen.WidgetLoadingScreen = ActiveLoadingWidget->TakeWidget();
+
+    GetMoviePlayer()->SetupLoadingScreen(LoadingScreen);
+}
+
+void UMyOnlineGameInstance::EndLoadingScreen(UWorld* LoadedWorld)
+{
+    ActiveLoadingWidget = nullptr;
+
+    if (GetMoviePlayer()->IsMovieCurrentlyPlaying())
+    {
+        GetMoviePlayer()->StopMovie();
+    }
+}
+
+void UMyOnlineGameInstance::ShowLoadingScreenWidget()
+{
+    if (!bShowLoadingScreenOnMapLoad || IsRunningDedicatedServer())
+    {
+        return;
+    }
+
+    if (!LoadingScreenWidgetClass)
+    {
+        return;
+    }
+
+    if (!ActiveLoadingWidget)
+    {
+        ActiveLoadingWidget = CreateWidget<UUserWidget>(this, LoadingScreenWidgetClass);
+    }
+
+    if (ActiveLoadingWidget)
+    {
+        ActiveLoadingWidget->AddToViewport(1000);
+        ActiveLoadingWidget->SetVisibility(ESlateVisibility::Visible);
+    }
+}
+
+void UMyOnlineGameInstance::HideLoadingScreenWidget()
+{
+    if (ActiveLoadingWidget)
+    {
+        ActiveLoadingWidget->RemoveFromParent();
+        ActiveLoadingWidget = nullptr;
+    }
+}
+
 
 void UMyOnlineGameInstance::Shutdown()
 {
+    FCoreUObjectDelegates::PreLoadMap.RemoveAll(this);
+    FCoreUObjectDelegates::PostLoadMapWithWorld.RemoveAll(this);
+
     if (GEngine)
     {
         GEngine->OnNetworkFailure().RemoveAll(this);

@@ -31,6 +31,7 @@ void AMultiplayerPlayerController::BeginPlay()
 		if (UMyOnlineGameInstance* GameInstance = Cast<UMyOnlineGameInstance>(GetGameInstance()))
 		{
 			GameInstance->OnMatchStarted();
+			GameInstance->HideLoadingScreenWidget();
 			UE_LOG(LogTemp, Log, TEXT("MultiplayerPlayerController: Started gameplay music for local player"));
 		}
 	}

@@ -10,6 +10,8 @@
 #include "Sound/SoundCue.h"
 #include "MyOnlineGameInstance.generated.h"
 
+class UUserWidget;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSessionSearchCompleted, bool, bSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnCreateSessionSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCreateSessionFailed, const FString&, ErrorMessage);
@@ -205,6 +207,13 @@ public:
     
     UFUNCTION(BlueprintCallable, Category = "BackgroundMusic")
     void ResumeMenuMusic();
+
+    // === Loading Screen ===
+    UFUNCTION(BlueprintCallable, Category = "LoadingScreen")
+    void ShowLoadingScreenWidget();
+
+    UFUNCTION(BlueprintCallable, Category = "LoadingScreen")
+    void HideLoadingScreenWidget();
     
     // === Authentication Functions ===
     UFUNCTION(BlueprintCallable, Category = "Authentication")
@@ -357,6 +366,16 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BackgroundMusic")
     bool bMatchHasEnded = false;
 
+    // === Loading Screen ===
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LoadingScreen")
+    bool bShowLoadingScreenOnMapLoad = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LoadingScreen")
+    float LoadingScreenMinDisplayTime = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LoadingScreen")
+    TSubclassOf<UUserWidget> LoadingScreenWidgetClass;
+
 protected:
     virtual void Init() override;
     virtual void Shutdown() override;
@@ -367,6 +386,9 @@ private:
     void ContinueCreateSessionAfterDestroy();
     void ContinueJoinSessionAfterDestroy();
     void ReturnToMainMenuLevel();
+
+    void BeginLoadingScreen(const FString& MapName);
+    void EndLoadingScreen(UWorld* LoadedWorld);
 
     // === Multiplayer ===
     void OnCreateSessionComplete(FName SessionName, bool bSuccess);
@@ -429,6 +451,9 @@ private:
     // === Background Music ===
     UPROPERTY()
     UAudioComponent* MusicAudioComponent;
+
+    UPROPERTY()
+    UUserWidget* ActiveLoadingWidget;
     
     int32 CurrentTrackIndex;
     

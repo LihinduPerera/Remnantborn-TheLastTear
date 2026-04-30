@@ -38,6 +38,7 @@ public class Remnantborn : ModuleRules
 			"GameplayAbilities",
 			"GameplayTasks",
 			"GameplayTags",
+			"MoviePlayer",
 			"HTTP",
 			"Json",
 			"JsonUtilities",

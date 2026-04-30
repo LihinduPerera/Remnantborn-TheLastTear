@@ -399,6 +399,15 @@ void ALobbyGameMode::ExecuteMatchTravel()
 
     FString TravelPath = ResolvedMapPath + "?listen";
     UE_LOG(LogTemp, Log, TEXT("Starting match travel to: %s"), *TravelPath);
+
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (ALobbyPlayerController* LobbyPC = Cast<ALobbyPlayerController>(It->Get()))
+        {
+            LobbyPC->Client_ShowLoadingScreen();
+        }
+    }
+
     GetWorld()->ServerTravel(TravelPath, true);
 }
 
