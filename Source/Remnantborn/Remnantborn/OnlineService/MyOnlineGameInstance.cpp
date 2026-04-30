@@ -15,6 +15,12 @@
 #include "IDesktopPlatform.h"
 #endif
 
+#if PLATFORM_WINDOWS
+#include "Windows/AllowWindowsPlatformTypes.h"
+#include <ShObjIdl.h>
+#include "Windows/HideWindowsPlatformTypes.h"
+#endif
+
 UMyOnlineGameInstance::UMyOnlineGameInstance()
 {
     DefaultMapPath = TEXT("/Game/Remnantborn/Levels/TestGround");
@@ -1130,12 +1136,12 @@ void UMyOnlineGameInstance::UploadAvatar(const FString& FilePath)
 bool UMyOnlineGameInstance::PickImageFile(FString& OutFilePath)
 {
 #if WITH_EDITOR
-	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
-	if (!DesktopPlatform)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("DesktopPlatform not available"));
-		return false;
-	}
+    IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+    if (!DesktopPlatform)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DesktopPlatform not available"));
+        return false;
+    }
 
     void* ParentWindowHandle = nullptr;
     TArray<FString> OutFiles;
@@ -1148,15 +1154,70 @@ bool UMyOnlineGameInstance::PickImageFile(FString& OutFilePath)
         EFileDialogFlags::None,
         OutFiles);
     
-	if (bResult && OutFiles.Num() > 0)
-	{
-		OutFilePath = OutFiles[0];
-		return true;
-	}
-	return false;
+    if (bResult && OutFiles.Num() > 0)
+    {
+        OutFilePath = OutFiles[0];
+        return true;
+    }
+    return false;
+#elif PLATFORM_WINDOWS
+    const HRESULT InitResult = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    const bool bDidInit = SUCCEEDED(InitResult);
+
+    IFileOpenDialog* FileDialog = nullptr;
+    HRESULT Result = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&FileDialog));
+    if (FAILED(Result) || !FileDialog)
+    {
+        if (bDidInit)
+        {
+            CoUninitialize();
+        }
+        UE_LOG(LogTemp, Warning, TEXT("Failed to create file dialog"));
+        return false;
+    }
+
+    COMDLG_FILTERSPEC Filters[] =
+    {
+        { L"Image Files", L"*.png;*.jpg;*.jpeg;*.gif;*.webp" }
+    };
+
+    FileDialog->SetFileTypes(UE_ARRAY_COUNT(Filters), Filters);
+    FileDialog->SetTitle(L"Select Avatar Image");
+
+    Result = FileDialog->Show(nullptr);
+    if (SUCCEEDED(Result))
+    {
+        IShellItem* Item = nullptr;
+        Result = FileDialog->GetResult(&Item);
+        if (SUCCEEDED(Result) && Item)
+        {
+            PWSTR FilePath = nullptr;
+            Result = Item->GetDisplayName(SIGDN_FILESYSPATH, &FilePath);
+            if (SUCCEEDED(Result) && FilePath)
+            {
+                OutFilePath = FString(FilePath);
+                CoTaskMemFree(FilePath);
+                Item->Release();
+                FileDialog->Release();
+                if (bDidInit)
+                {
+                    CoUninitialize();
+                }
+                return true;
+            }
+            Item->Release();
+        }
+    }
+
+    FileDialog->Release();
+    if (bDidInit)
+    {
+        CoUninitialize();
+    }
+    return false;
 #else
-	UE_LOG(LogTemp, Warning, TEXT("PickImageFile is only available in editor builds."));
-	return false;
+    UE_LOG(LogTemp, Warning, TEXT("PickImageFile is not available on this platform."));
+    return false;
 #endif
 }
 
