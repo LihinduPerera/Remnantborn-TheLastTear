@@ -4,7 +4,7 @@
 
 # Remnantborn: The Last Tear
 
-*An Unreal Engine 5.7 Multiplayer Experience*
+*An Unreal Engine 5.7 multiplayer experience*
 
 [![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.7-black?style=for-the-badge&logo=unrealengine)](https://www.unrealengine.com)
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue?style=for-the-badge&logo=c%2B%2B)](https://docs.unrealengine.com)
@@ -14,16 +14,45 @@
 
 ---
 
-## About
+## Overview
 
-**Remnantborn: The Last Tear** is a multiplayer game built in Unreal Engine 5.7. Enter a mystical world where ancient runes hold the power of creation and destruction.
+**Remnantborn** is the multiplayer game built in Unreal Engine 5.7. **Remnantborn - The Last Tear** is the story mode, and it is coming soon.
+
+## Screenshots
+
+<table>
+   <tr>
+      <td align="center">
+         <img src="ScreenShots/ss1.png" alt="Main Menu" width="480" />
+         <br />
+         <strong>Main Menu</strong>
+      </td>
+      <td align="center">
+         <img src="ScreenShots/ss2.png" alt="Store" width="480" />
+         <br />
+         <strong>Remnant Store</strong>
+      </td>
+   </tr>
+   <tr>
+      <td align="center">
+         <img src="ScreenShots/ss3.png" alt="Forest Map" width="480" />
+         <br />
+         <strong>Forest Map</strong>
+      </td>
+      <td align="center">
+         <img src="ScreenShots/ss4.png" alt="Blackfen Map" width="480" />
+         <br />
+         <strong>Blackfen Map</strong>
+      </td>
+   </tr>
+</table>
 
 ## Features
 
-- **Multiplayer Gameplay** - Play with friends using Unreal Engine's networking capabilities
-- **Stunning Visuals** - Powered by Unreal Engine 5.7's advanced rendering features
-- **Mystical World** - Explore realms bound by ancient runic magic
-- **The Last Tear** - Discover the secrets of the crystallized essence that binds the world together
+- **Multiplayer Gameplay** - Play with friends using Unreal Engine networking
+- **Cinematic Visuals** - Powered by Unreal Engine 5.7 rendering features
+- **Mystical World** - Explore realms bound by runic magic
+- **The Last Tear** - Discover secrets of the crystallized essence
 
 ## Technical Details
 
@@ -42,9 +71,9 @@
 ### Installation
 
 1. Clone the repository
-   ```bash
-   git clone https://github.com/LihinduPerera/Remnantborn-TheLastTear.git
-   ```
+    ```bash
+    git clone https://github.com/LihinduPerera/Remnantborn-TheLastTear.git
+    ```
 
 2. Right-click on `Remnantborn.uproject` and select **Generate Visual Studio project files**
 
@@ -60,9 +89,10 @@
 |--------|-----|
 | Move | WASD |
 | Jump | Space |
-| Interact | E |
+| Weapon 1 | 1 |
+| Weapon 2 | 2 |
+| Weapon 2 Ult | E |
 | Sprint | Shift |
-| Inventory | I |
 
 ## Project Structure
 
@@ -75,13 +105,11 @@ Remnantborn/
 └── Remnantborn.uproject  # Project file
 ```
 
-## Development
+## Development Notes
 
-To contribute or modify the game:
-
-1. Ensure you have the correct engine version (5.7)
-2. Follow the existing code structure and naming conventions
-3. Test multiplayer functionality using the Editor's "Play as Client" feature
+1. Ensure the correct engine version (5.7)
+2. Follow existing naming conventions
+3. Test multiplayer using the Editor's "Play as Client" feature
 
 ## Credits
 
@@ -90,5 +118,3 @@ Created with passion using Unreal Engine 5.7
 ---
 
 *"In the remnants of a forgotten world, a new legend begins."*
-
-</div>
